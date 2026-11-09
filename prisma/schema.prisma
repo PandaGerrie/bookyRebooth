@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ENTITY_ADMIN
+}
+
+enum Weekday {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum FlowStepType {
+  FREE_CHOICE
+  PRODUCT_SET
+  LOCATIONS
+  SELLERS_AGENDA
+}
+
+model Entity {
+  id        String     @id @default(cuid())
+  name      String
+  slug      String     @unique
+  active    Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  users     User[]
+  locations Location[]
+  sellers   Seller[]
+  flows     Flow[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         Role
+  entityId     String?
+  entity       Entity?  @relation(fields: [entityId], references: [id], onDelete: Restrict)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([entityId])
+}
+
+model ProductSet {
+  id        String           @id @default(cuid())
+  name      String
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  products  ProductSetItem[]
+}
+
+model ProductSetItem {
+  id           String     @id @default(cuid())
+  name         String
+  photoUrl     String
+  sortOrder    Int        @default(0)
+  productSetId String
+  productSet   ProductSet @relation(fields: [productSetId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([productSetId])
+}
+
+model Location {
+  id            String           @id @default(cuid())
+  name          String
+  imageUrl      String?          @db.Text
+  address       String           @db.VarChar(255)
+  googleMapsUrl String           @db.Text
+  phone         String           @db.VarChar(50)
+  email         String
+  permalink     String
+  entityId      String
+  entity        Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  schedules     SellerSchedule[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@unique([entityId, permalink])
+  @@index([entityId])
+}
+
+model Seller {
+  id        String           @id @default(cuid())
+  name      String
+  email     String
+  imageUrl  String           @db.Text
+  active    Boolean          @default(true)
+  entityId  String
+  entity    Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  schedules SellerSchedule[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([entityId])
+}
+
+model SellerSchedule {
+  id         String   @id @default(cuid())
+  weekday    Weekday
+  startTime  String
+  endTime    String
+  sellerId   String
+  seller     Seller   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  locationId String
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([sellerId, weekday])
+  @@index([sellerId])
+  @@index([locationId])
+}
+
+model Flow {
+  id            String     @id @default(cuid())
+  name          String
+  slug          String
+  featuredImage String?    @db.Text
+  active        Boolean    @default(true)
+  entityId      String
+  entity        Entity     @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  steps         FlowStep[]
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@unique([entityId, slug])
+  @@index([entityId])
+}
+
+model FlowStep {
+  id        String       @id @default(cuid())
+  flowId    String
+  flow      Flow         @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  type      FlowStepType
+  sortOrder Int          @default(0)
+  config    Json
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([flowId])
+}

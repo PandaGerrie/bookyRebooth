@@ -1,0 +1,26 @@
+CREATE TABLE `Flow` (
+    `id` VARCHAR(191) NOT NULL,
+    `entityId` VARCHAR(191) NOT NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+
+    UNIQUE INDEX `Flow_entityId_key`(`entityId`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `FlowStep` (
+    `id` VARCHAR(191) NOT NULL,
+    `flowId` VARCHAR(191) NOT NULL,
+    `type` ENUM('FREE_CHOICE', 'PRODUCT_SET', 'LOCATIONS', 'SELLERS_AGENDA') NOT NULL,
+    `sortOrder` INTEGER NOT NULL DEFAULT 0,
+    `config` JSON NOT NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+
+    INDEX `FlowStep_flowId_idx`(`flowId`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+ALTER TABLE `Flow` ADD CONSTRAINT `Flow_entityId_fkey` FOREIGN KEY (`entityId`) REFERENCES `Entity`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE `FlowStep` ADD CONSTRAINT `FlowStep_flowId_fkey` FOREIGN KEY (`flowId`) REFERENCES `Flow`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;

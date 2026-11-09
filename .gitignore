@@ -1,0 +1,9 @@
+node_modules
+dist
+admin/dist
+media/**
+!media/**/
+!media/**/.gitkeep
+.env
+*.log
+.DS_Store

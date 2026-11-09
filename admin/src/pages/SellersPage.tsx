@@ -1,0 +1,766 @@
+import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { api, uploadMedia } from "../api/client";
+import type {
+  Entity,
+  Location,
+  Seller,
+  SellerSchedule,
+  Weekday,
+} from "../api/types";
+import { useAuth } from "../auth/AuthContext";
+
+type DraftSchedule = {
+  key: string;
+  weekday: Weekday | "";
+  startTime: string;
+  endTime: string;
+  locationId: string;
+};
+
+type FormState = {
+  name: string;
+  email: string;
+  imageUrl: string;
+  active: boolean;
+  entityId: string;
+  schedules: DraftSchedule[];
+};
+
+const WEEKDAYS: Array<{ value: Weekday; label: string }> = [
+  { value: "MONDAY", label: "Maandag" },
+  { value: "TUESDAY", label: "Dinsdag" },
+  { value: "WEDNESDAY", label: "Woensdag" },
+  { value: "THURSDAY", label: "Donderdag" },
+  { value: "FRIDAY", label: "Vrijdag" },
+  { value: "SATURDAY", label: "Zaterdag" },
+  { value: "SUNDAY", label: "Zondag" },
+];
+
+function newSchedule(weekday: Weekday | "" = ""): DraftSchedule {
+  return {
+    key: crypto.randomUUID(),
+    weekday,
+    startTime: "09:00",
+    endTime: "17:00",
+    locationId: "",
+  };
+}
+
+const emptyForm: FormState = {
+  name: "",
+  email: "",
+  imageUrl: "",
+  active: true,
+  entityId: "",
+  schedules: [],
+};
+
+export function SellersPage() {
+  const { user } = useAuth();
+  const isSuper = user?.role === "SUPER_ADMIN";
+  const [sellers, setSellers] = useState<Seller[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [entities, setEntities] = useState<Entity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState<FormState>(emptyForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [filterEntityId, setFilterEntityId] = useState("");
+
+  const activeEntityId = isSuper
+    ? form.entityId || filterEntityId
+    : user?.entityId || "";
+
+  const mediaEntityKey = useMemo(() => {
+    if (!isSuper) return user?.entity?.slug || "global";
+    const selected = entities.find((entity) => entity.id === activeEntityId);
+    return selected?.slug || "global";
+  }, [isSuper, user?.entity?.slug, entities, activeEntityId]);
+
+  const availableWeekdays = useMemo(() => {
+    const used = new Set(
+      form.schedules
+        .map((item) => item.weekday)
+        .filter((day): day is Weekday => Boolean(day)),
+    );
+    return WEEKDAYS.filter((day) => !used.has(day.value));
+  }, [form.schedules]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        if (isSuper) {
+          const entitiesData = await api<{ entities: Entity[] }>("/entities");
+          if (!cancelled) setEntities(entitiesData.entities);
+        }
+
+        const entityQuery =
+          isSuper && filterEntityId
+            ? `?entityId=${encodeURIComponent(filterEntityId)}`
+            : "";
+
+        const [sellersData, locationsData] = await Promise.all([
+          api<{ sellers: Seller[] }>(`/sellers${entityQuery}`),
+          api<{ locations: Location[] }>(`/locations${entityQuery}`),
+        ]);
+
+        if (!cancelled) {
+          setSellers(sellersData.sellers);
+          setLocations(locationsData.locations);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Laden mislukt");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [isSuper, filterEntityId]);
+
+  async function reload() {
+    const entityQuery =
+      isSuper && filterEntityId
+        ? `?entityId=${encodeURIComponent(filterEntityId)}`
+        : "";
+    const [sellersData, locationsData] = await Promise.all([
+      api<{ sellers: Seller[] }>(`/sellers${entityQuery}`),
+      api<{ locations: Location[] }>(`/locations${entityQuery}`),
+    ]);
+    setSellers(sellersData.sellers);
+    setLocations(locationsData.locations);
+  }
+
+  async function loadLocationsForEntity(entityId: string) {
+    if (!entityId && isSuper) {
+      setLocations([]);
+      return;
+    }
+    const query =
+      isSuper && entityId ? `?entityId=${encodeURIComponent(entityId)}` : "";
+    const data = await api<{ locations: Location[] }>(`/locations${query}`);
+    setLocations(data.locations);
+  }
+
+  function startCreate() {
+    const entityId = isSuper
+      ? filterEntityId || entities[0]?.id || ""
+      : user?.entityId || "";
+    setEditingId(null);
+    setForm({
+      ...emptyForm,
+      entityId,
+      schedules: [],
+    });
+    setShowForm(true);
+    if (entityId) void loadLocationsForEntity(entityId);
+  }
+
+  function startEdit(seller: Seller) {
+    setEditingId(seller.id);
+    setForm({
+      name: seller.name,
+      email: seller.email,
+      imageUrl: seller.imageUrl,
+      active: seller.active,
+      entityId: seller.entityId,
+      schedules: seller.schedules.map((item: SellerSchedule) => ({
+        key: item.id ?? crypto.randomUUID(),
+        weekday: item.weekday,
+        startTime: item.startTime,
+        endTime: item.endTime,
+        locationId: item.locationId,
+      })),
+    });
+    setShowForm(true);
+    void loadLocationsForEntity(seller.entityId);
+  }
+
+  function addScheduleDay() {
+    const nextDay = availableWeekdays[0]?.value;
+    if (!nextDay) {
+      setError("Alle weekdagen zijn al toegevoegd");
+      return;
+    }
+    setError(null);
+    setForm((prev) => ({
+      ...prev,
+      schedules: [...prev.schedules, newSchedule(nextDay)],
+    }));
+  }
+
+  async function onImageChange(file: File | null) {
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const url = await uploadMedia(file, mediaEntityKey);
+      setForm((prev) => ({ ...prev, imageUrl: url }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload mislukt");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+
+    if (!form.imageUrl) {
+      setError("Afbeelding is verplicht");
+      return;
+    }
+
+    for (const item of form.schedules) {
+      if (!item.weekday || !item.locationId) {
+        setError("Elke werkdag heeft een weekdag en locatie nodig");
+        return;
+      }
+      if (item.startTime >= item.endTime) {
+        setError("Eindtijd moet na starttijd liggen");
+        return;
+      }
+    }
+
+    setSaving(true);
+    setError(null);
+
+    const payload = {
+      name: form.name,
+      email: form.email,
+      imageUrl: form.imageUrl,
+      active: form.active,
+      schedules: form.schedules.map((item) => ({
+        weekday: item.weekday as Weekday,
+        startTime: item.startTime,
+        endTime: item.endTime,
+        locationId: item.locationId,
+      })),
+      ...(isSuper && !editingId ? { entityId: form.entityId } : {}),
+    };
+
+    try {
+      if (editingId) {
+        await api(`/sellers/${editingId}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+      } else {
+        if (isSuper && !form.entityId) {
+          setError("Kies een entiteit");
+          setSaving(false);
+          return;
+        }
+        await api("/sellers", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+      }
+
+      setShowForm(false);
+      setForm(emptyForm);
+      setEditingId(null);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Opslaan mislukt");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function onDelete(id: string) {
+    if (!window.confirm("Deze verkoper verwijderen?")) return;
+    setError(null);
+    try {
+      await api(`/sellers/${id}`, { method: "DELETE" });
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Verwijderen mislukt");
+    }
+  }
+
+  async function toggleActive(seller: Seller) {
+    const nextActive = !seller.active;
+    setError(null);
+
+    // Optimistic UI update
+    setSellers((prev) =>
+      prev.map((item) =>
+        item.id === seller.id ? { ...item, active: nextActive } : item,
+      ),
+    );
+
+    try {
+      await api(`/sellers/${seller.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          name: seller.name,
+          email: seller.email,
+          imageUrl: seller.imageUrl,
+          active: nextActive,
+          schedules: seller.schedules.map((item) => ({
+            weekday: item.weekday,
+            startTime: item.startTime,
+            endTime: item.endTime,
+            locationId: item.locationId,
+          })),
+        }),
+      });
+    } catch (err) {
+      setSellers((prev) =>
+        prev.map((item) =>
+          item.id === seller.id ? { ...item, active: seller.active } : item,
+        ),
+      );
+      setError(err instanceof Error ? err.message : "Status wijzigen mislukt");
+    }
+  }
+
+  function weekdayLabel(value: Weekday) {
+    return WEEKDAYS.find((day) => day.value === value)?.label ?? value;
+  }
+
+  function optionsForSchedule(current: DraftSchedule) {
+    const used = new Set(
+      form.schedules
+        .filter((item) => item.key !== current.key && item.weekday)
+        .map((item) => item.weekday),
+    );
+    return WEEKDAYS.filter(
+      (day) => !used.has(day.value) || day.value === current.weekday,
+    );
+  }
+
+  return (
+    <div>
+      <div className="page-header">
+        <div>
+          <h1>Verkopers</h1>
+          <p>Verkopers en werkschema’s van jouw entiteit.</p>
+        </div>
+        <button type="button" className="btn" onClick={startCreate}>
+          Nieuwe verkoper
+        </button>
+      </div>
+
+      {isSuper ? (
+        <label style={{ marginBottom: "1rem", maxWidth: 320 }}>
+          Filter op entiteit
+          <select
+            value={filterEntityId}
+            onChange={(e) => setFilterEntityId(e.target.value)}
+          >
+            <option value="">Alle entiteiten</option>
+            {entities.map((entity) => (
+              <option key={entity.id} value={entity.id}>
+                {entity.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
+      {error ? (
+        <p className="error" style={{ marginBottom: "1rem" }}>
+          {error}
+        </p>
+      ) : null}
+
+      <div className="panel">
+        {loading ? (
+          <div className="empty">Laden…</div>
+        ) : sellers.length === 0 ? (
+          <div className="empty">Nog geen verkopers.</div>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Verkoper</th>
+                <th>E-mail</th>
+                <th>Status</th>
+                {isSuper ? <th>Entiteit</th> : null}
+                <th>Werkdagen</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {sellers.map((seller) => (
+                <tr key={seller.id}>
+                  <td>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.75rem",
+                      }}
+                    >
+                      <img
+                        src={seller.imageUrl}
+                        alt=""
+                        style={{
+                          width: 40,
+                          height: 40,
+                          objectFit: "cover",
+                          borderRadius: 6,
+                          border: "1px solid var(--line)",
+                        }}
+                      />
+                      <span>{seller.name}</span>
+                    </div>
+                  </td>
+                  <td>{seller.email}</td>
+                  <td>
+                    <label className="switch-row switch-row-compact">
+                      <span className="switch">
+                        <input
+                          type="checkbox"
+                          checked={seller.active}
+                          onChange={() => void toggleActive(seller)}
+                          aria-label={
+                            seller.active
+                              ? "Deactiveer verkoper"
+                              : "Activeer verkoper"
+                          }
+                        />
+                        <span className="switch-slider" />
+                      </span>
+                      <span className="muted">
+                        {seller.active ? "Actief" : "Inactief"}
+                      </span>
+                    </label>
+                  </td>
+                  {isSuper ? <td>{seller.entity?.name ?? "—"}</td> : null}
+                  <td>
+                    {seller.schedules.length === 0
+                      ? "—"
+                      : seller.schedules
+                          .map((item) => weekdayLabel(item.weekday))
+                          .join(", ")}
+                  </td>
+                  <td>
+                    <div className="actions">
+                      <button
+                        type="button"
+                        className={
+                          showForm && editingId === seller.id
+                            ? "btn btn-small"
+                            : "btn btn-secondary btn-small"
+                        }
+                        disabled={
+                          (showForm && editingId !== seller.id) ||
+                          (editingId === seller.id &&
+                            (saving || uploading))
+                        }
+                        onClick={() => {
+                          if (showForm && editingId === seller.id) {
+                            (
+                              document.getElementById(
+                                "seller-form",
+                              ) as HTMLFormElement | null
+                            )?.requestSubmit();
+                            return;
+                          }
+                          startEdit(seller);
+                        }}
+                      >
+                        {showForm && editingId === seller.id
+                          ? saving
+                            ? "Opslaan…"
+                            : "Opslaan"
+                          : "Bewerken"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        onClick={() => void onDelete(seller.id)}
+                      >
+                        Verwijderen
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {showForm ? (
+          <form id="seller-form" className="drawer stack" onSubmit={onSubmit}>
+            <h2>{editingId ? "Verkoper bewerken" : "Nieuwe verkoper"}</h2>
+
+            {isSuper && !editingId ? (
+              <label>
+                Entiteit
+                <select
+                  value={form.entityId}
+                  onChange={(e) => {
+                    const entityId = e.target.value;
+                    setForm((prev) => ({
+                      ...prev,
+                      entityId,
+                      schedules: prev.schedules.map((item) => ({
+                        ...item,
+                        locationId: "",
+                      })),
+                    }));
+                    void loadLocationsForEntity(entityId);
+                  }}
+                  required
+                >
+                  <option value="">Kies entiteit…</option>
+                  {entities.map((entity) => (
+                    <option key={entity.id} value={entity.id}>
+                      {entity.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+
+            <div className="form-grid two">
+              <label>
+                Naam
+                <input
+                  value={form.name}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, name: e.target.value }))
+                  }
+                  required
+                />
+              </label>
+              <label>
+                E-mail
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, email: e.target.value }))
+                  }
+                  required
+                />
+              </label>
+              <label>
+                Afbeelding
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) =>
+                    void onImageChange(e.target.files?.[0] ?? null)
+                  }
+                />
+              </label>
+            </div>
+
+            <label className="switch-row">
+              <span className="switch">
+                <input
+                  type="checkbox"
+                  checked={form.active}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, active: e.target.checked }))
+                  }
+                />
+                <span className="switch-slider" />
+              </span>
+              <span>
+                <strong>{form.active ? "Actief" : "Inactief"}</strong>
+                <span className="muted" style={{ display: "block" }}>
+                  Inactieve verkopers zijn tijdelijk niet zichtbaar in de
+                  toepassing.
+                </span>
+              </span>
+            </label>
+
+            {uploading ? <p className="muted">Afbeelding uploaden…</p> : null}
+            {form.imageUrl ? (
+              <img
+                src={form.imageUrl}
+                alt={form.name || "Verkoper"}
+                style={{
+                  width: 96,
+                  height: 96,
+                  objectFit: "cover",
+                  borderRadius: 8,
+                  border: "1px solid var(--line)",
+                }}
+              />
+            ) : null}
+
+            <div className="stack">
+              <h3>Werkschema</h3>
+              <p className="muted">
+                Elke weekdag kan maar één keer. Kies per dag start, einde en
+                locatie.
+              </p>
+
+              {locations.length === 0 ? (
+                <p className="error">
+                  Maak eerst minstens één locatie aan voor deze entiteit.
+                </p>
+              ) : null}
+
+              {form.schedules.map((item) => (
+                <div key={item.key} className="repeater-item">
+                  <div className="panel-body stack">
+                    <div className="form-grid two">
+                      <label>
+                        Weekdag
+                        <select
+                          value={item.weekday}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              schedules: prev.schedules.map((schedule) =>
+                                schedule.key === item.key
+                                  ? {
+                                      ...schedule,
+                                      weekday: e.target.value as Weekday,
+                                    }
+                                  : schedule,
+                              ),
+                            }))
+                          }
+                          required
+                        >
+                          <option value="">Kies dag…</option>
+                          {optionsForSchedule(item).map((day) => (
+                            <option key={day.value} value={day.value}>
+                              {day.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Locatie
+                        <select
+                          value={item.locationId}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              schedules: prev.schedules.map((schedule) =>
+                                schedule.key === item.key
+                                  ? {
+                                      ...schedule,
+                                      locationId: e.target.value,
+                                    }
+                                  : schedule,
+                              ),
+                            }))
+                          }
+                          required
+                        >
+                          <option value="">Kies locatie…</option>
+                          {locations.map((location) => (
+                            <option key={location.id} value={location.id}>
+                              {location.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Starttijd
+                        <input
+                          type="time"
+                          value={item.startTime}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              schedules: prev.schedules.map((schedule) =>
+                                schedule.key === item.key
+                                  ? {
+                                      ...schedule,
+                                      startTime: e.target.value,
+                                    }
+                                  : schedule,
+                              ),
+                            }))
+                          }
+                          required
+                        />
+                      </label>
+                      <label>
+                        Eindtijd
+                        <input
+                          type="time"
+                          value={item.endTime}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              schedules: prev.schedules.map((schedule) =>
+                                schedule.key === item.key
+                                  ? { ...schedule, endTime: e.target.value }
+                                  : schedule,
+                              ),
+                            }))
+                          }
+                          required
+                        />
+                      </label>
+                    </div>
+                    <div className="actions">
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        onClick={() =>
+                          setForm((prev) => ({
+                            ...prev,
+                            schedules: prev.schedules.filter(
+                              (schedule) => schedule.key !== item.key,
+                            ),
+                          }))
+                        }
+                      >
+                        Dag verwijderen
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              <div className="repeater-add">
+                <button
+                  type="button"
+                  className="add-product-btn"
+                  onClick={addScheduleDay}
+                  disabled={availableWeekdays.length === 0}
+                >
+                  <span className="add-product-circle">+</span>
+                  <span>Voeg werkdag toe</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowForm(false)}
+              >
+                Annuleren
+              </button>
+              <button
+                type="submit"
+                className="btn"
+                disabled={saving || uploading}
+              >
+                {saving ? "Opslaan…" : "Opslaan"}
+              </button>
+            </div>
+          </form>
+        ) : null}
+      </div>
+    </div>
+  );
+}

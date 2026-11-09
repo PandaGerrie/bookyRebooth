@@ -1,0 +1,236 @@
+import { Router } from "express";
+import { prisma } from "../../lib/prisma.js";
+import { requireAuth } from "../../middleware/auth.js";
+import {
+  resolveEntityFilter,
+  resolveEntityIdForWrite,
+} from "../../lib/entityScope.js";
+import { createSellerSchema, updateSellerSchema } from "./sellers.schemas.js";
+
+export const sellersRouter = Router();
+
+sellersRouter.use(requireAuth);
+
+const sellerInclude = {
+  entity: { select: { id: true, name: true, slug: true } },
+  schedules: {
+    orderBy: { weekday: "asc" as const },
+    include: {
+      location: {
+        select: { id: true, name: true, permalink: true },
+      },
+    },
+  },
+};
+
+sellersRouter.get("/", async (req, res, next) => {
+  try {
+    const filter = resolveEntityFilter(
+      req.user!,
+      typeof req.query.entityId === "string" ? req.query.entityId : null,
+    );
+
+    if ("error" in filter) {
+      res.status(filter.status).json({ error: filter.error });
+      return;
+    }
+
+    const sellers = await prisma.seller.findMany({
+      where: filter.entityId ? { entityId: filter.entityId } : undefined,
+      orderBy: { name: "asc" },
+      include: sellerInclude,
+    });
+
+    res.json({ sellers });
+  } catch (error) {
+    next(error);
+  }
+});
+
+sellersRouter.get("/:id", async (req, res, next) => {
+  try {
+    const seller = await prisma.seller.findUnique({
+      where: { id: req.params.id },
+      include: sellerInclude,
+    });
+
+    if (!seller) {
+      res.status(404).json({ error: "Verkoper niet gevonden" });
+      return;
+    }
+
+    if (
+      req.user!.role === "ENTITY_ADMIN" &&
+      seller.entityId !== req.user!.entityId
+    ) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    res.json({ seller });
+  } catch (error) {
+    next(error);
+  }
+});
+
+async function assertLocationsBelongToEntity(
+  locationIds: string[],
+  entityId: string,
+): Promise<string | null> {
+  if (locationIds.length === 0) return null;
+
+  const uniqueIds = [...new Set(locationIds)];
+  const count = await prisma.location.count({
+    where: {
+      id: { in: uniqueIds },
+      entityId,
+    },
+  });
+
+  if (count !== uniqueIds.length) {
+    return "Een of meer locaties horen niet bij deze entiteit";
+  }
+
+  return null;
+}
+
+sellersRouter.post("/", async (req, res, next) => {
+  try {
+    const body = createSellerSchema.parse(req.body);
+    const scope = resolveEntityIdForWrite(req.user!, body.entityId);
+
+    if ("error" in scope) {
+      res.status(scope.status).json({ error: scope.error });
+      return;
+    }
+
+    const entity = await prisma.entity.findUnique({
+      where: { id: scope.entityId },
+    });
+
+    if (!entity) {
+      res.status(400).json({ error: "entityId does not exist" });
+      return;
+    }
+
+    const locationError = await assertLocationsBelongToEntity(
+      body.schedules.map((item) => item.locationId),
+      scope.entityId,
+    );
+
+    if (locationError) {
+      res.status(400).json({ error: locationError });
+      return;
+    }
+
+    const seller = await prisma.seller.create({
+      data: {
+        name: body.name,
+        email: body.email.toLowerCase(),
+        imageUrl: body.imageUrl,
+        active: body.active,
+        entityId: scope.entityId,
+        schedules: {
+          create: body.schedules.map((item) => ({
+            weekday: item.weekday,
+            startTime: item.startTime,
+            endTime: item.endTime,
+            locationId: item.locationId,
+          })),
+        },
+      },
+      include: sellerInclude,
+    });
+
+    res.status(201).json({ seller });
+  } catch (error) {
+    next(error);
+  }
+});
+
+sellersRouter.put("/:id", async (req, res, next) => {
+  try {
+    const body = updateSellerSchema.parse(req.body);
+    const existing = await prisma.seller.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!existing) {
+      res.status(404).json({ error: "Verkoper niet gevonden" });
+      return;
+    }
+
+    if (
+      req.user!.role === "ENTITY_ADMIN" &&
+      existing.entityId !== req.user!.entityId
+    ) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const locationError = await assertLocationsBelongToEntity(
+      body.schedules.map((item) => item.locationId),
+      existing.entityId,
+    );
+
+    if (locationError) {
+      res.status(400).json({ error: locationError });
+      return;
+    }
+
+    const seller = await prisma.$transaction(async (tx) => {
+      await tx.sellerSchedule.deleteMany({
+        where: { sellerId: req.params.id },
+      });
+
+      return tx.seller.update({
+        where: { id: req.params.id },
+        data: {
+          name: body.name,
+          email: body.email.toLowerCase(),
+          imageUrl: body.imageUrl,
+          active: body.active,
+          schedules: {
+            create: body.schedules.map((item) => ({
+              weekday: item.weekday,
+              startTime: item.startTime,
+              endTime: item.endTime,
+              locationId: item.locationId,
+            })),
+          },
+        },
+        include: sellerInclude,
+      });
+    });
+
+    res.json({ seller });
+  } catch (error) {
+    next(error);
+  }
+});
+
+sellersRouter.delete("/:id", async (req, res, next) => {
+  try {
+    const existing = await prisma.seller.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!existing) {
+      res.status(404).json({ error: "Verkoper niet gevonden" });
+      return;
+    }
+
+    if (
+      req.user!.role === "ENTITY_ADMIN" &&
+      existing.entityId !== req.user!.entityId
+    ) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    await prisma.seller.delete({ where: { id: req.params.id } });
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
