@@ -3,6 +3,7 @@ import Select from "react-select";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, uploadMedia } from "../api/client";
 import type {
+  Category,
   Flow,
   FlowStep,
   FlowStepType,
@@ -23,6 +24,14 @@ function normalizeStep(step: FlowStep): FlowStep {
       config: {
         locationIds: step.config.locationIds ?? [],
         showImage: step.config.showImage ?? true,
+      },
+    };
+  }
+  if (step.type === "CATEGORIES") {
+    return {
+      ...step,
+      config: {
+        categoryIds: step.config.categoryIds ?? [],
       },
     };
   }
@@ -48,6 +57,11 @@ const BLOCKS: Array<{
     type: "LOCATIONS",
     title: "Locaties",
     description: "Selecteer één of meer locaties van jouw entiteit.",
+  },
+  {
+    type: "CATEGORIES",
+    title: "Categorieën",
+    description: "Selecteer één of meer categorieën van jouw entiteit.",
   },
   {
     type: "SELLERS_AGENDA",
@@ -77,6 +91,8 @@ function createDraftStep(type: FlowStepType): DraftStep {
       return { key, type, config: { productSetId: "" } };
     case "LOCATIONS":
       return { key, type, config: { locationIds: [], showImage: true } };
+    case "CATEGORIES":
+      return { key, type, config: { categoryIds: [] } };
     case "SELLERS_AGENDA":
       return { key, type, config: {} };
   }
@@ -122,6 +138,7 @@ export function FlowBuilderPage() {
   const [steps, setSteps] = useState<DraftStep[]>([]);
   const [productSets, setProductSets] = useState<ProductSet[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -141,6 +158,15 @@ export function FlowBuilderPage() {
         label: location.name,
       })),
     [locations],
+  );
+
+  const categoryOptions = useMemo<SelectOption[]>(
+    () =>
+      categories.map((category) => ({
+        value: category.id,
+        label: category.name,
+      })),
+    [categories],
   );
 
   useEffect(() => {
@@ -173,10 +199,18 @@ export function FlowBuilderPage() {
           })),
         );
 
-        const locationsData = await api<{ locations: Location[] }>(
-          `/locations?entityId=${encodeURIComponent(flow.entityId)}`,
-        );
-        if (!cancelled) setLocations(locationsData.locations);
+        const [locationsData, categoriesData] = await Promise.all([
+          api<{ locations: Location[] }>(
+            `/locations?entityId=${encodeURIComponent(flow.entityId)}`,
+          ),
+          api<{ categories: Category[] }>(
+            `/categories?entityId=${encodeURIComponent(flow.entityId)}`,
+          ),
+        ]);
+        if (!cancelled) {
+          setLocations(locationsData.locations);
+          setCategories(categoriesData.categories);
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Laden mislukt");
@@ -245,6 +279,14 @@ export function FlowBuilderPage() {
       draftStep.config.locationIds.length === 0
     ) {
       setError("Selecteer minstens één locatie");
+      return;
+    }
+
+    if (
+      draftStep.type === "CATEGORIES" &&
+      draftStep.config.categoryIds.length === 0
+    ) {
+      setError("Selecteer minstens één categorie");
       return;
     }
 
@@ -349,6 +391,9 @@ export function FlowBuilderPage() {
     }
     if (step.type === "LOCATIONS") {
       return `${step.config.locationIds.length} locatie(s)`;
+    }
+    if (step.type === "CATEGORIES") {
+      return `${step.config.categoryIds.length} categorie(ën)`;
     }
     return "Automatisch uit systeem";
   }
@@ -824,6 +869,32 @@ export function FlowBuilderPage() {
                         <span>Afbeelding tonen</span>
                       </label>
                     </div>
+                  ) : null}
+
+                  {draftStep.type === "CATEGORIES" ? (
+                    <label>
+                      Categorieën
+                      <Select
+                        isMulti
+                        classNamePrefix="rs"
+                        options={categoryOptions}
+                        value={categoryOptions.filter((option) =>
+                          draftStep.config.categoryIds.includes(option.value),
+                        )}
+                        onChange={(selected) =>
+                          setDraftStep({
+                            ...draftStep,
+                            config: {
+                              categoryIds: selected.map(
+                                (option) => option.value,
+                              ),
+                            },
+                          })
+                        }
+                        placeholder="Selecteer categorieën…"
+                        noOptionsMessage={() => "Geen categorieën"}
+                      />
+                    </label>
                   ) : null}
 
                   {draftStep.type === "SELLERS_AGENDA" ? (

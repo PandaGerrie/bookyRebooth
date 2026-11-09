@@ -69,6 +69,15 @@ export type Location = {
   entity?: EntitySummary | null;
 };
 
+export type Category = {
+  id: string;
+  name: string;
+  imageUrl: string | null;
+  slug: string;
+  entityId: string;
+  entity?: EntitySummary | null;
+};
+
 export type SellerSchedule = {
   id?: string;
   weekday: Weekday;
@@ -86,6 +95,7 @@ export type Seller = {
   active: boolean;
   entityId: string;
   entity?: EntitySummary | null;
+  categories?: Category[];
   schedules: SellerSchedule[];
 };
 
@@ -93,6 +103,7 @@ export type FlowStepType =
   | "FREE_CHOICE"
   | "PRODUCT_SET"
   | "LOCATIONS"
+  | "CATEGORIES"
   | "SELLERS_AGENDA";
 
 export type FreeChoiceOption = {
@@ -116,6 +127,11 @@ export type FlowStep =
       id?: string;
       type: "LOCATIONS";
       config: { locationIds: string[]; showImage: boolean };
+    }
+  | {
+      id?: string;
+      type: "CATEGORIES";
+      config: { categoryIds: string[] };
     }
   | {
       id?: string;

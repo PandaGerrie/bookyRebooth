@@ -120,6 +120,11 @@ p {
   gap: 0.75rem;
 }
 
+.sidebar-version {
+  font-size: 0.75rem;
+  color: var(--muted, rgba(221, 222, 223, 0.65));
+}
+
 .main {
   padding: 2rem;
 }

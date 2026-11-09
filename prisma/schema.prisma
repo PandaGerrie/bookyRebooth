@@ -26,20 +26,22 @@ enum FlowStepType {
   FREE_CHOICE
   PRODUCT_SET
   LOCATIONS
+  CATEGORIES
   SELLERS_AGENDA
 }
 
 model Entity {
-  id        String     @id @default(cuid())
-  name      String
-  slug      String     @unique
-  active    Boolean    @default(true)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  users     User[]
-  locations Location[]
-  sellers   Seller[]
-  flows     Flow[]
+  id         String     @id @default(cuid())
+  name       String
+  slug       String     @unique
+  active     Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  users      User[]
+  locations  Location[]
+  sellers    Seller[]
+  categories Category[]
+  flows      Flow[]
 }
 
 model User {
@@ -95,17 +97,33 @@ model Location {
   @@index([entityId])
 }
 
-model Seller {
-  id        String           @id @default(cuid())
+model Category {
+  id        String   @id @default(cuid())
   name      String
-  email     String
-  imageUrl  String           @db.Text
-  active    Boolean          @default(true)
+  imageUrl  String?  @db.Text
+  slug      String
   entityId  String
-  entity    Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  schedules SellerSchedule[]
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  entity    Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  sellers   Seller[] @relation("SellerToCategory")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([entityId, slug])
+  @@index([entityId])
+}
+
+model Seller {
+  id         String           @id @default(cuid())
+  name       String
+  email      String
+  imageUrl   String           @db.Text
+  active     Boolean          @default(true)
+  entityId   String
+  entity     Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  schedules  SellerSchedule[]
+  categories Category[]       @relation("SellerToCategory")
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
 
   @@index([entityId])
 }

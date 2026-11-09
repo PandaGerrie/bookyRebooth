@@ -13,6 +13,10 @@ sellersRouter.use(requireAuth);
 
 const sellerInclude = {
   entity: { select: { id: true, name: true, slug: true } },
+  categories: {
+    select: { id: true, name: true, slug: true, imageUrl: true },
+    orderBy: { name: "asc" as const },
+  },
   schedules: {
     orderBy: { weekday: "asc" as const },
     include: {
@@ -94,6 +98,27 @@ async function assertLocationsBelongToEntity(
   return null;
 }
 
+async function assertCategoriesBelongToEntity(
+  categoryIds: string[],
+  entityId: string,
+): Promise<string | null> {
+  if (categoryIds.length === 0) return null;
+
+  const uniqueIds = [...new Set(categoryIds)];
+  const count = await prisma.category.count({
+    where: {
+      id: { in: uniqueIds },
+      entityId,
+    },
+  });
+
+  if (count !== uniqueIds.length) {
+    return "Een of meer categorieën horen niet bij deze entiteit";
+  }
+
+  return null;
+}
+
 sellersRouter.post("/", async (req, res, next) => {
   try {
     const body = createSellerSchema.parse(req.body);
@@ -123,6 +148,16 @@ sellersRouter.post("/", async (req, res, next) => {
       return;
     }
 
+    const categoryError = await assertCategoriesBelongToEntity(
+      body.categoryIds,
+      scope.entityId,
+    );
+
+    if (categoryError) {
+      res.status(400).json({ error: categoryError });
+      return;
+    }
+
     const seller = await prisma.seller.create({
       data: {
         name: body.name,
@@ -130,6 +165,9 @@ sellersRouter.post("/", async (req, res, next) => {
         imageUrl: body.imageUrl,
         active: body.active,
         entityId: scope.entityId,
+        categories: {
+          connect: body.categoryIds.map((id) => ({ id })),
+        },
         schedules: {
           create: body.schedules.map((item) => ({
             weekday: item.weekday,
@@ -178,18 +216,31 @@ sellersRouter.put("/:id", async (req, res, next) => {
       return;
     }
 
+    const categoryError = await assertCategoriesBelongToEntity(
+      body.categoryIds,
+      existing.entityId,
+    );
+
+    if (categoryError) {
+      res.status(400).json({ error: categoryError });
+      return;
+    }
+
     const seller = await prisma.$transaction(async (tx) => {
       await tx.sellerSchedule.deleteMany({
-        where: { sellerId: req.params.id },
+        where: { sellerId: String(req.params.id) },
       });
 
       return tx.seller.update({
-        where: { id: req.params.id },
+        where: { id: String(req.params.id) },
         data: {
           name: body.name,
           email: body.email.toLowerCase(),
           imageUrl: body.imageUrl,
           active: body.active,
+          categories: {
+            set: body.categoryIds.map((id) => ({ id })),
+          },
           schedules: {
             create: body.schedules.map((item) => ({
               weekday: item.weekday,

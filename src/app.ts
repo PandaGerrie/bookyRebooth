@@ -9,6 +9,7 @@ import { entitiesRouter } from "./modules/entities/entities.routes.js";
 import { usersRouter } from "./modules/users/users.routes.js";
 import { productSetsRouter } from "./modules/productSets/productSets.routes.js";
 import { locationsRouter } from "./modules/locations/locations.routes.js";
+import { categoriesRouter } from "./modules/categories/categories.routes.js";
 import { sellersRouter } from "./modules/sellers/sellers.routes.js";
 import { flowsRouter } from "./modules/flows/flows.routes.js";
 import { mediaRouter } from "./modules/media/media.routes.js";
@@ -42,6 +43,7 @@ export function createApp() {
   app.use("/api/users", usersRouter);
   app.use("/api/product-sets", productSetsRouter);
   app.use("/api/locations", locationsRouter);
+  app.use("/api/categories", categoriesRouter);
   app.use("/api/sellers", sellersRouter);
   app.use("/api/flows", flowsRouter);
   app.use("/api/media", mediaRouter);

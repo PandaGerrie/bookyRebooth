@@ -1,6 +1,8 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
+import Select from "react-select";
 import { api, uploadMedia } from "../api/client";
 import type {
+  Category,
   Entity,
   Location,
   Seller,
@@ -17,12 +19,15 @@ type DraftSchedule = {
   locationId: string;
 };
 
+type SelectOption = { value: string; label: string };
+
 type FormState = {
   name: string;
   email: string;
   imageUrl: string;
   active: boolean;
   entityId: string;
+  categoryIds: string[];
   schedules: DraftSchedule[];
 };
 
@@ -52,6 +57,7 @@ const emptyForm: FormState = {
   imageUrl: "",
   active: true,
   entityId: "",
+  categoryIds: [],
   schedules: [],
 };
 
@@ -60,6 +66,7 @@ export function SellersPage() {
   const isSuper = user?.role === "SUPER_ADMIN";
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [entities, setEntities] = useState<Entity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +96,15 @@ export function SellersPage() {
     return WEEKDAYS.filter((day) => !used.has(day.value));
   }, [form.schedules]);
 
+  const categoryOptions = useMemo<SelectOption[]>(
+    () =>
+      categories.map((category) => ({
+        value: category.id,
+        label: category.name,
+      })),
+    [categories],
+  );
+
   useEffect(() => {
     let cancelled = false;
 
@@ -106,14 +122,16 @@ export function SellersPage() {
             ? `?entityId=${encodeURIComponent(filterEntityId)}`
             : "";
 
-        const [sellersData, locationsData] = await Promise.all([
+        const [sellersData, locationsData, categoriesData] = await Promise.all([
           api<{ sellers: Seller[] }>(`/sellers${entityQuery}`),
           api<{ locations: Location[] }>(`/locations${entityQuery}`),
+          api<{ categories: Category[] }>(`/categories${entityQuery}`),
         ]);
 
         if (!cancelled) {
           setSellers(sellersData.sellers);
           setLocations(locationsData.locations);
+          setCategories(categoriesData.categories);
         }
       } catch (err) {
         if (!cancelled) {
@@ -135,23 +153,30 @@ export function SellersPage() {
       isSuper && filterEntityId
         ? `?entityId=${encodeURIComponent(filterEntityId)}`
         : "";
-    const [sellersData, locationsData] = await Promise.all([
+    const [sellersData, locationsData, categoriesData] = await Promise.all([
       api<{ sellers: Seller[] }>(`/sellers${entityQuery}`),
       api<{ locations: Location[] }>(`/locations${entityQuery}`),
+      api<{ categories: Category[] }>(`/categories${entityQuery}`),
     ]);
     setSellers(sellersData.sellers);
     setLocations(locationsData.locations);
+    setCategories(categoriesData.categories);
   }
 
-  async function loadLocationsForEntity(entityId: string) {
+  async function loadEntityScopedData(entityId: string) {
     if (!entityId && isSuper) {
       setLocations([]);
+      setCategories([]);
       return;
     }
     const query =
       isSuper && entityId ? `?entityId=${encodeURIComponent(entityId)}` : "";
-    const data = await api<{ locations: Location[] }>(`/locations${query}`);
-    setLocations(data.locations);
+    const [locationsData, categoriesData] = await Promise.all([
+      api<{ locations: Location[] }>(`/locations${query}`),
+      api<{ categories: Category[] }>(`/categories${query}`),
+    ]);
+    setLocations(locationsData.locations);
+    setCategories(categoriesData.categories);
   }
 
   function startCreate() {
@@ -162,10 +187,11 @@ export function SellersPage() {
     setForm({
       ...emptyForm,
       entityId,
+      categoryIds: [],
       schedules: [],
     });
     setShowForm(true);
-    if (entityId) void loadLocationsForEntity(entityId);
+    if (entityId) void loadEntityScopedData(entityId);
   }
 
   function startEdit(seller: Seller) {
@@ -176,6 +202,7 @@ export function SellersPage() {
       imageUrl: seller.imageUrl,
       active: seller.active,
       entityId: seller.entityId,
+      categoryIds: (seller.categories ?? []).map((category) => category.id),
       schedules: seller.schedules.map((item: SellerSchedule) => ({
         key: item.id ?? crypto.randomUUID(),
         weekday: item.weekday,
@@ -185,7 +212,7 @@ export function SellersPage() {
       })),
     });
     setShowForm(true);
-    void loadLocationsForEntity(seller.entityId);
+    void loadEntityScopedData(seller.entityId);
   }
 
   function addScheduleDay() {
@@ -242,6 +269,7 @@ export function SellersPage() {
       email: form.email,
       imageUrl: form.imageUrl,
       active: form.active,
+      categoryIds: form.categoryIds,
       schedules: form.schedules.map((item) => ({
         weekday: item.weekday as Weekday,
         startTime: item.startTime,
@@ -310,6 +338,7 @@ export function SellersPage() {
           email: seller.email,
           imageUrl: seller.imageUrl,
           active: nextActive,
+          categoryIds: (seller.categories ?? []).map((category) => category.id),
           schedules: seller.schedules.map((item) => ({
             weekday: item.weekday,
             startTime: item.startTime,
@@ -391,6 +420,7 @@ export function SellersPage() {
                 <th>E-mail</th>
                 <th>Status</th>
                 {isSuper ? <th>Entiteit</th> : null}
+                <th>Categorieën</th>
                 <th>Werkdagen</th>
                 <th></th>
               </tr>
@@ -442,6 +472,13 @@ export function SellersPage() {
                     </label>
                   </td>
                   {isSuper ? <td>{seller.entity?.name ?? "—"}</td> : null}
+                  <td>
+                    {(seller.categories ?? []).length === 0
+                      ? "—"
+                      : (seller.categories ?? [])
+                          .map((category) => category.name)
+                          .join(", ")}
+                  </td>
                   <td>
                     {seller.schedules.length === 0
                       ? "—"
@@ -510,12 +547,13 @@ export function SellersPage() {
                     setForm((prev) => ({
                       ...prev,
                       entityId,
+                      categoryIds: [],
                       schedules: prev.schedules.map((item) => ({
                         ...item,
                         locationId: "",
                       })),
                     }));
-                    void loadLocationsForEntity(entityId);
+                    void loadEntityScopedData(entityId);
                   }}
                   required
                 >
@@ -581,6 +619,26 @@ export function SellersPage() {
                   toepassing.
                 </span>
               </span>
+            </label>
+
+            <label>
+              Categorieën
+              <Select
+                isMulti
+                classNamePrefix="rs"
+                options={categoryOptions}
+                value={categoryOptions.filter((option) =>
+                  form.categoryIds.includes(option.value),
+                )}
+                onChange={(selected) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    categoryIds: selected.map((option) => option.value),
+                  }))
+                }
+                placeholder="Selecteer categorieën…"
+                noOptionsMessage={() => "Geen categorieën"}
+              />
             </label>
 
             {uploading ? <p className="muted">Afbeelding uploaden…</p> : null}

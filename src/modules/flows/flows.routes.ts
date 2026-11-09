@@ -91,6 +91,23 @@ async function validateSteps(
         return "Een of meer locaties horen niet bij deze entiteit";
       }
     }
+
+    if (step.type === "CATEGORIES") {
+      const categoryIds = step.config.categoryIds;
+      if (!Array.isArray(categoryIds)) {
+        return "Ongeldige categorieën";
+      }
+      const uniqueIds = [...new Set(categoryIds.map(String))];
+      const count = await prisma.category.count({
+        where: {
+          id: { in: uniqueIds },
+          entityId,
+        },
+      });
+      if (count !== uniqueIds.length) {
+        return "Een of meer categorieën horen niet bij deze entiteit";
+      }
+    }
   }
 
   return null;

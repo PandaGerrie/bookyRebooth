@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { AppShell } from "./components/AppShell";
+import { CategoriesPage } from "./pages/CategoriesPage";
 import { EntitiesPage } from "./pages/EntitiesPage";
 import { FlowBuilderPage } from "./pages/FlowBuilderPage";
 import { FlowsOverviewPage } from "./pages/FlowsOverviewPage";
@@ -44,6 +45,7 @@ export function App() {
         <Route path="settings" element={<GeneralSettingsPage />} />
         <Route path="locations" element={<LocationsPage />} />
         <Route path="sellers" element={<SellersPage />} />
+        <Route path="categories" element={<CategoriesPage />} />
         <Route path="new-flow" element={<FlowsOverviewPage />} />
         <Route path="new-flow/:id" element={<FlowBuilderPage />} />
         <Route path="product-sets" element={<ProductSetsPage />} />

@@ -60,6 +60,7 @@ export const createSellerSchema = z
     imageUrl: z.string().min(1),
     active: z.boolean().optional().default(true),
     entityId: z.string().cuid().optional(),
+    categoryIds: z.array(z.string().cuid()).default([]),
     schedules: z.array(scheduleItemSchema).default([]),
   })
   .superRefine((data, ctx) => {
@@ -73,6 +74,7 @@ export const updateSellerSchema = z
     email: z.string().email(),
     imageUrl: z.string().min(1),
     active: z.boolean(),
+    categoryIds: z.array(z.string().cuid()).default([]),
     schedules: z.array(scheduleItemSchema).default([]),
   })
   .superRefine((data, ctx) => {

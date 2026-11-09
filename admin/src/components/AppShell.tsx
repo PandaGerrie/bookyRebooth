@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { CMS_VERSION } from "../version";
 
 const roleLabel: Record<string, string> = {
   SUPER_ADMIN: "Super admin",
@@ -49,6 +50,9 @@ export function AppShell() {
           <NavLink to="/sellers" className={navClass}>
             Verkopers
           </NavLink>
+          <NavLink to="/categories" className={navClass}>
+            Categorieën
+          </NavLink>
 
           <div className="nav-divider" aria-hidden="true" />
 
@@ -75,6 +79,7 @@ export function AppShell() {
           <button type="button" className="btn btn-ghost" onClick={logout}>
             Uitloggen
           </button>
+          <div className="sidebar-version">Booky CMS - V{CMS_VERSION}</div>
         </div>
       </aside>
 

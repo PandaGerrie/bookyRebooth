@@ -23,6 +23,10 @@ const locationsConfigSchema = z.object({
   showImage: z.boolean().optional().default(true),
 });
 
+const categoriesConfigSchema = z.object({
+  categoryIds: z.array(z.string().cuid()).min(1),
+});
+
 const sellersAgendaConfigSchema = z.object({}).strict();
 
 const stepSchema = z.discriminatedUnion("type", [
@@ -37,6 +41,10 @@ const stepSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("LOCATIONS"),
     config: locationsConfigSchema,
+  }),
+  z.object({
+    type: z.literal("CATEGORIES"),
+    config: categoriesConfigSchema,
   }),
   z.object({
     type: z.literal("SELLERS_AGENDA"),
