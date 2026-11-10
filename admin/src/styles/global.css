@@ -52,8 +52,10 @@ p {
 
 .shell {
   min-height: 100vh;
+  height: 100vh;
   display: grid;
   grid-template-columns: 240px 1fr;
+  overflow: hidden;
 }
 
 .sidebar {
@@ -127,6 +129,10 @@ p {
 
 .main {
   padding: 2rem;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .page-header {
@@ -428,6 +434,18 @@ select:focus {
   color: var(--muted);
 }
 
+.badge-success {
+  color: #166534;
+  background: #dcfce7;
+  border-color: #bbf7d0;
+}
+
+.badge-danger {
+  color: #991b1b;
+  background: #fee2e2;
+  border-color: #fecaca;
+}
+
 .login-page {
   min-height: 100vh;
   display: grid;
@@ -465,6 +483,55 @@ select:focus {
   border-top: 1px solid var(--line);
   background: var(--bg);
   padding: 1.25rem;
+}
+
+.btn-icon {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.btn-icon:hover {
+  color: #991b1b;
+  border-color: #fecaca;
+  background: #fee2e2;
+}
+
+.table-row-expand > td {
+  background: var(--bg);
+  padding: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.table-expand-panel {
+  padding: 1.25rem;
+  border-top: 1px solid var(--line);
+}
+
+.table-sort-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-weight: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.table-sort-btn:hover {
+  color: var(--accent);
 }
 
 .empty {
@@ -589,14 +656,35 @@ select:focus {
 
 .flow-page {
   position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.flow-page > .panel {
+  flex: 1;
+  min-height: 0;
 }
 
 .flow-canvas {
-  min-height: 420px;
+  flex: 1;
+  min-height: 0;
   padding: 2rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(39, 102, 171, 0.05);
+  background-image: radial-gradient(
+    rgba(39, 102, 171, 0.22) 1.2px,
+    transparent 1.2px
+  );
+  background-size: 20px 20px;
+  background-position: 0 0;
 }
 
 .flow-track {
+  width: 100%;
   max-width: 720px;
   margin: 0 auto;
   display: grid;

@@ -11,6 +11,8 @@ import { productSetsRouter } from "./modules/productSets/productSets.routes.js";
 import { locationsRouter } from "./modules/locations/locations.routes.js";
 import { categoriesRouter } from "./modules/categories/categories.routes.js";
 import { sellersRouter } from "./modules/sellers/sellers.routes.js";
+import { sellerConnectionsRouter } from "./modules/sellerConnections/sellerConnections.routes.js";
+import { publicRouter } from "./modules/public/public.routes.js";
 import { flowsRouter } from "./modules/flows/flows.routes.js";
 import { mediaRouter } from "./modules/media/media.routes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -45,6 +47,8 @@ export function createApp() {
   app.use("/api/locations", locationsRouter);
   app.use("/api/categories", categoriesRouter);
   app.use("/api/sellers", sellersRouter);
+  app.use("/api/seller-connections", sellerConnectionsRouter);
+  app.use("/api/public", publicRouter);
   app.use("/api/flows", flowsRouter);
   app.use("/api/media", mediaRouter);
 

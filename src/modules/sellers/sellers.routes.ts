@@ -13,6 +13,9 @@ sellersRouter.use(requireAuth);
 
 const sellerInclude = {
   entity: { select: { id: true, name: true, slug: true } },
+  primaryLocation: {
+    select: { id: true, name: true, permalink: true },
+  },
   categories: {
     select: { id: true, name: true, slug: true, imageUrl: true },
     orderBy: { name: "asc" as const },
@@ -139,7 +142,7 @@ sellersRouter.post("/", async (req, res, next) => {
     }
 
     const locationError = await assertLocationsBelongToEntity(
-      body.schedules.map((item) => item.locationId),
+      [body.primaryLocationId, ...body.schedules.map((item) => item.locationId)],
       scope.entityId,
     );
 
@@ -165,6 +168,7 @@ sellersRouter.post("/", async (req, res, next) => {
         imageUrl: body.imageUrl,
         active: body.active,
         entityId: scope.entityId,
+        primaryLocationId: body.primaryLocationId,
         categories: {
           connect: body.categoryIds.map((id) => ({ id })),
         },
@@ -207,7 +211,7 @@ sellersRouter.put("/:id", async (req, res, next) => {
     }
 
     const locationError = await assertLocationsBelongToEntity(
-      body.schedules.map((item) => item.locationId),
+      [body.primaryLocationId, ...body.schedules.map((item) => item.locationId)],
       existing.entityId,
     );
 
@@ -238,6 +242,7 @@ sellersRouter.put("/:id", async (req, res, next) => {
           email: body.email.toLowerCase(),
           imageUrl: body.imageUrl,
           active: body.active,
+          primaryLocationId: body.primaryLocationId,
           categories: {
             set: body.categoryIds.map((id) => ({ id })),
           },

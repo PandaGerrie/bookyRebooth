@@ -1,6 +1,14 @@
 import "dotenv/config";
 import { z } from "zod";
 
+const optionalString = z
+  .string()
+  .optional()
+  .transform((value) => {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : undefined;
+  });
+
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   PORT: z.coerce.number().int().positive().default(3000),
@@ -16,6 +24,10 @@ const envSchema = z.object({
   SEED_DEMO_ENTITY_SLUG: z.string().default("demo-dealer"),
   SEED_DEMO_ADMIN_EMAIL: z.string().email().optional(),
   SEED_DEMO_ADMIN_PASSWORD: z.string().min(8).optional(),
+  AZURE_TENANT_ID: optionalString,
+  AZURE_CLIENT_ID: optionalString,
+  AZURE_CLIENT_SECRET: optionalString,
+  AZURE_TIMEZONE: z.string().default("Europe/Brussels"),
 });
 
 const parsed = envSchema.safeParse(process.env);

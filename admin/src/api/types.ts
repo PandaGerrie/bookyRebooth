@@ -94,6 +94,8 @@ export type Seller = {
   imageUrl: string;
   active: boolean;
   entityId: string;
+  primaryLocationId?: string | null;
+  primaryLocation?: { id: string; name: string; permalink?: string } | null;
   entity?: EntitySummary | null;
   categories?: Category[];
   schedules: SellerSchedule[];

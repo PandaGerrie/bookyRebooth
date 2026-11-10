@@ -79,19 +79,20 @@ model ProductSetItem {
 }
 
 model Location {
-  id            String           @id @default(cuid())
-  name          String
-  imageUrl      String?          @db.Text
-  address       String           @db.VarChar(255)
-  googleMapsUrl String           @db.Text
-  phone         String           @db.VarChar(50)
-  email         String
-  permalink     String
-  entityId      String
-  entity        Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  schedules     SellerSchedule[]
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  id             String           @id @default(cuid())
+  name           String
+  imageUrl       String?          @db.Text
+  address        String           @db.VarChar(255)
+  googleMapsUrl  String           @db.Text
+  phone          String           @db.VarChar(50)
+  email          String
+  permalink      String
+  entityId       String
+  entity         Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  schedules      SellerSchedule[]
+  primarySellers Seller[]         @relation("SellerPrimaryLocation")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
   @@unique([entityId, permalink])
   @@index([entityId])
@@ -113,19 +114,22 @@ model Category {
 }
 
 model Seller {
-  id         String           @id @default(cuid())
-  name       String
-  email      String
-  imageUrl   String           @db.Text
-  active     Boolean          @default(true)
-  entityId   String
-  entity     Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  schedules  SellerSchedule[]
-  categories Category[]       @relation("SellerToCategory")
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
+  id                String           @id @default(cuid())
+  name              String
+  email             String
+  imageUrl          String           @db.Text
+  active            Boolean          @default(true)
+  entityId          String
+  entity            Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  primaryLocationId String?
+  primaryLocation   Location?        @relation("SellerPrimaryLocation", fields: [primaryLocationId], references: [id], onDelete: SetNull)
+  schedules         SellerSchedule[]
+  categories        Category[]       @relation("SellerToCategory")
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   @@index([entityId])
+  @@index([primaryLocationId])
 }
 
 model SellerSchedule {
