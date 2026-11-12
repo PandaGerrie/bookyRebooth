@@ -58,6 +58,7 @@ entitiesRouter.post("/", async (req, res, next) => {
       data: {
         name: body.name,
         slug: body.slug,
+        domain: body.domain ? body.domain : null,
         active: body.active,
       },
     });
@@ -73,8 +74,13 @@ entitiesRouter.patch("/:id", async (req, res, next) => {
     const body = updateEntitySchema.parse(req.body);
 
     const entity = await prisma.entity.update({
-      where: { id: req.params.id },
-      data: body,
+      where: { id: String(req.params.id) },
+      data: {
+        ...body,
+        ...(body.domain !== undefined
+          ? { domain: body.domain ? body.domain : null }
+          : {}),
+      },
     });
 
     res.json({ entity });

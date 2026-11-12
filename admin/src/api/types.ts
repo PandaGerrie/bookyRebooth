@@ -9,6 +9,7 @@ export type EntitySummary = {
 
 export type Entity = EntitySummary & {
   active: boolean;
+  domain?: string | null;
   createdAt?: string;
   updatedAt?: string;
   _count?: { users: number };
@@ -106,7 +107,8 @@ export type FlowStepType =
   | "PRODUCT_SET"
   | "LOCATIONS"
   | "CATEGORIES"
-  | "SELLERS_AGENDA";
+  | "SELLERS_AGENDA"
+  | "CONFIRMATION";
 
 export type FreeChoiceOption = {
   name: string;
@@ -123,22 +125,43 @@ export type FlowStep =
   | {
       id?: string;
       type: "PRODUCT_SET";
-      config: { productSetId: string };
+      config: {
+        title: string;
+        productSetId: string;
+        allowNoProduct: boolean;
+        noProductTitle: string;
+        noProductImageUrl?: string | null;
+      };
     }
   | {
       id?: string;
       type: "LOCATIONS";
-      config: { locationIds: string[]; showImage: boolean };
+      config: {
+        title: string;
+        locationIds: string[];
+        showImage: boolean;
+        imageFit: "contain" | "cover";
+      };
     }
   | {
       id?: string;
       type: "CATEGORIES";
-      config: { categoryIds: string[] };
+      config: {
+        title: string;
+        categoryIds: string[];
+        showImage: boolean;
+        imageFit: "contain" | "cover";
+      };
     }
   | {
       id?: string;
       type: "SELLERS_AGENDA";
       config: Record<string, never>;
+    }
+  | {
+      id?: string;
+      type: "CONFIRMATION";
+      config: { title: string };
     };
 
 export type Flow = {
@@ -147,6 +170,7 @@ export type Flow = {
   slug: string;
   featuredImage: string | null;
   active: boolean;
+  sortOrder?: number;
   entityId: string;
   entity?: EntitySummary | null;
   steps?: FlowStep[];

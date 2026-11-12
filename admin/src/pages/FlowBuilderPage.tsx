@@ -18,12 +18,26 @@ type BuilderTab = "builder" | "settings";
 type SelectOption = { value: string; label: string };
 
 function normalizeStep(step: FlowStep): FlowStep {
+  if (step.type === "PRODUCT_SET") {
+    return {
+      ...step,
+      config: {
+        title: step.config.title ?? "",
+        productSetId: step.config.productSetId ?? "",
+        allowNoProduct: step.config.allowNoProduct ?? false,
+        noProductTitle: step.config.noProductTitle ?? "",
+        noProductImageUrl: step.config.noProductImageUrl ?? null,
+      },
+    };
+  }
   if (step.type === "LOCATIONS") {
     return {
       ...step,
       config: {
+        title: step.config.title ?? "",
         locationIds: step.config.locationIds ?? [],
         showImage: step.config.showImage ?? true,
+        imageFit: step.config.imageFit === "cover" ? "cover" : "contain",
       },
     };
   }
@@ -31,11 +45,39 @@ function normalizeStep(step: FlowStep): FlowStep {
     return {
       ...step,
       config: {
+        title: step.config.title ?? "",
         categoryIds: step.config.categoryIds ?? [],
+        showImage: step.config.showImage ?? true,
+        imageFit: step.config.imageFit === "cover" ? "cover" : "contain",
+      },
+    };
+  }
+  if (step.type === "CONFIRMATION") {
+    return {
+      ...step,
+      config: {
+        title: step.config.title?.trim() || "Persoonlijke gegevens",
       },
     };
   }
   return step;
+}
+
+function createConfirmationStep(existing?: FlowStep): DraftStep {
+  const normalized =
+    existing?.type === "CONFIRMATION"
+      ? normalizeStep(existing)
+      : ({
+          type: "CONFIRMATION",
+          config: { title: "Persoonlijke gegevens" },
+        } satisfies FlowStep);
+  return {
+    ...normalized,
+    key:
+      existing?.type === "CONFIRMATION" && existing.id
+        ? existing.id
+        : crypto.randomUUID(),
+  };
 }
 
 const BLOCKS: Array<{
@@ -88,17 +130,52 @@ function createDraftStep(type: FlowStepType): DraftStep {
         config: { options: [{ name: "", slug: "", imageUrl: null }] },
       };
     case "PRODUCT_SET":
-      return { key, type, config: { productSetId: "" } };
+      return {
+        key,
+        type,
+        config: {
+          title: "",
+          productSetId: "",
+          allowNoProduct: false,
+          noProductTitle: "",
+          noProductImageUrl: null,
+        },
+      };
     case "LOCATIONS":
-      return { key, type, config: { locationIds: [], showImage: true } };
+      return {
+        key,
+        type,
+        config: {
+          title: "",
+          locationIds: [],
+          showImage: true,
+          imageFit: "contain",
+        },
+      };
     case "CATEGORIES":
-      return { key, type, config: { categoryIds: [] } };
+      return {
+        key,
+        type,
+        config: {
+          title: "",
+          categoryIds: [],
+          showImage: true,
+          imageFit: "contain",
+        },
+      };
     case "SELLERS_AGENDA":
       return { key, type, config: {} };
+    case "CONFIRMATION":
+      return {
+        key,
+        type,
+        config: { title: "Persoonlijke gegevens" },
+      };
   }
 }
 
 function stepTitle(type: FlowStepType) {
+  if (type === "CONFIRMATION") return "Bevestiging";
   return BLOCKS.find((block) => block.type === type)?.title ?? type;
 }
 
@@ -124,6 +201,28 @@ function IconChevronDown() {
   );
 }
 
+function IconPencil() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M3 17.3V21h3.7L17.8 9.9l-3.7-3.7L3 17.3zm17.7-10.4c.4-.4.4-1 0-1.4l-2.2-2.2c-.4-.4-1-.4-1.4 0l-1.7 1.7 3.7 3.7 1.6-1.8z"
+      />
+    </svg>
+  );
+}
+
+function IconTrash() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v9h-2V9zm4 0h2v9h-2V9zM7 9h2v9H7V9zm-1 12h12a1 1 0 0 0 1-1V8H5v12a1 1 0 0 0 1 1z"
+      />
+    </svg>
+  );
+}
+
 export function FlowBuilderPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -136,6 +235,9 @@ export function FlowBuilderPage() {
   const [entitySlug, setEntitySlug] = useState(user?.entity?.slug || "global");
   const [uploadingFeatured, setUploadingFeatured] = useState(false);
   const [steps, setSteps] = useState<DraftStep[]>([]);
+  const [confirmationStep, setConfirmationStep] = useState<DraftStep>(() =>
+    createConfirmationStep(),
+  );
   const [productSets, setProductSets] = useState<ProductSet[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -192,11 +294,18 @@ export function FlowBuilderPage() {
         setActive(flow.active);
         setEntitySlug(flow.entity?.slug || "global");
         setProductSets(productSetsData.productSets);
+        const loadedSteps = flow.steps ?? [];
+        const existingConfirmation = loadedSteps.find(
+          (step) => step.type === "CONFIRMATION",
+        );
+        setConfirmationStep(createConfirmationStep(existingConfirmation));
         setSteps(
-          (flow.steps ?? []).map((step) => ({
-            ...normalizeStep(step),
-            key: step.id ?? crypto.randomUUID(),
-          })),
+          loadedSteps
+            .filter((step) => step.type !== "CONFIRMATION")
+            .map((step) => ({
+              ...normalizeStep(step),
+              key: step.id ?? crypto.randomUUID(),
+            })),
         );
 
         const [locationsData, categoriesData] = await Promise.all([
@@ -258,6 +367,18 @@ export function FlowBuilderPage() {
   function confirmDraftStep() {
     if (!draftStep) return;
 
+    if (draftStep.type === "CONFIRMATION") {
+      const title = draftStep.config.title.trim() || "Persoonlijke gegevens";
+      setConfirmationStep({
+        ...draftStep,
+        key: confirmationStep.key,
+        config: { title },
+      });
+      setError(null);
+      closeSlide();
+      return;
+    }
+
     if (draftStep.type === "FREE_CHOICE") {
       const options = draftStep.config.options.filter(
         (option) => option.name.trim() && option.slug.trim(),
@@ -269,25 +390,52 @@ export function FlowBuilderPage() {
       draftStep.config.options = options;
     }
 
-    if (draftStep.type === "PRODUCT_SET" && !draftStep.config.productSetId) {
-      setError("Kies een product set");
-      return;
+    if (draftStep.type === "PRODUCT_SET") {
+      if (!draftStep.config.title.trim()) {
+        setError("Vul een titel in");
+        return;
+      }
+      if (!draftStep.config.productSetId) {
+        setError("Kies een product set");
+        return;
+      }
+      if (
+        draftStep.config.allowNoProduct &&
+        !draftStep.config.noProductTitle.trim()
+      ) {
+        setError("Vul een titel in voor ‘geen keuze’");
+        return;
+      }
+      draftStep.config.title = draftStep.config.title.trim();
+      draftStep.config.noProductTitle = draftStep.config.noProductTitle.trim();
+      if (!draftStep.config.allowNoProduct) {
+        draftStep.config.noProductTitle = "";
+        draftStep.config.noProductImageUrl = null;
+      }
     }
 
-    if (
-      draftStep.type === "LOCATIONS" &&
-      draftStep.config.locationIds.length === 0
-    ) {
-      setError("Selecteer minstens één locatie");
-      return;
+    if (draftStep.type === "LOCATIONS") {
+      if (!draftStep.config.title.trim()) {
+        setError("Vul een titel in");
+        return;
+      }
+      if (draftStep.config.locationIds.length === 0) {
+        setError("Selecteer minstens één locatie");
+        return;
+      }
+      draftStep.config.title = draftStep.config.title.trim();
     }
 
-    if (
-      draftStep.type === "CATEGORIES" &&
-      draftStep.config.categoryIds.length === 0
-    ) {
-      setError("Selecteer minstens één categorie");
-      return;
+    if (draftStep.type === "CATEGORIES") {
+      if (!draftStep.config.title.trim()) {
+        setError("Vul een titel in");
+        return;
+      }
+      if (draftStep.config.categoryIds.length === 0) {
+        setError("Selecteer minstens één categorie");
+        return;
+      }
+      draftStep.config.title = draftStep.config.title.trim();
     }
 
     setError(null);
@@ -340,15 +488,32 @@ export function FlowBuilderPage() {
           slug: slug.trim(),
           featuredImage,
           active,
-          steps: steps.map(({ type, config }) => ({ type, config })),
+          steps: [
+            ...steps.map(({ type, config }) => ({ type, config })),
+            {
+              type: "CONFIRMATION" as const,
+              config: {
+                title:
+                  confirmationStep.config.title.trim() ||
+                  "Persoonlijke gegevens",
+              },
+            },
+          ],
         }),
       });
 
+      const savedSteps = data.flow.steps ?? [];
+      const savedConfirmation = savedSteps.find(
+        (step) => step.type === "CONFIRMATION",
+      );
+      setConfirmationStep(createConfirmationStep(savedConfirmation));
       setSteps(
-        (data.flow.steps ?? []).map((step) => ({
-          ...normalizeStep(step),
-          key: step.id ?? crypto.randomUUID(),
-        })),
+        savedSteps
+          .filter((step) => step.type !== "CONFIRMATION")
+          .map((step) => ({
+            ...normalizeStep(step),
+            key: step.id ?? crypto.randomUUID(),
+          })),
       );
       navigate("/new-flow");
     } catch (err) {
@@ -379,23 +544,70 @@ export function FlowBuilderPage() {
     }
   }
 
-  function renderStepSummary(step: DraftStep) {
+  async function uploadNoProductImage(file: File | null) {
+    if (!file || !draftStep || draftStep.type !== "PRODUCT_SET") return;
+    setUploadingOptionIndex(-1);
+    setError(null);
+    try {
+      const url = await uploadMedia(file, entitySlug);
+      setDraftStep({
+        ...draftStep,
+        config: {
+          ...draftStep.config,
+          noProductImageUrl: url,
+        },
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload mislukt");
+    } finally {
+      setUploadingOptionIndex(null);
+    }
+  }
+
+  function stepSummaryParts(step: DraftStep): {
+    title: string | null;
+    labels: string[];
+  } {
     if (step.type === "FREE_CHOICE") {
-      return `${step.config.options.length} optie(s)`;
+      return {
+        title: null,
+        labels: [`${step.config.options.length} optie(s)`],
+      };
     }
     if (step.type === "PRODUCT_SET") {
-      return (
+      const setName =
         productSets.find((item) => item.id === step.config.productSetId)
-          ?.name || "Geen product set"
-      );
+          ?.name || "Geen product set";
+      return {
+        title: step.config.title || null,
+        labels: [
+          setName,
+          ...(step.config.allowNoProduct ? ["+ geen keuze"] : []),
+        ],
+      };
     }
     if (step.type === "LOCATIONS") {
-      return `${step.config.locationIds.length} locatie(s)`;
+      return {
+        title: step.config.title || null,
+        labels: [`${step.config.locationIds.length} locatie(s)`],
+      };
     }
     if (step.type === "CATEGORIES") {
-      return `${step.config.categoryIds.length} categorie(ën)`;
+      return {
+        title: step.config.title || null,
+        labels: [`${step.config.categoryIds.length} categorie(ën)`],
+      };
     }
-    return "Automatisch uit systeem";
+    if (step.type === "CONFIRMATION") {
+      return {
+        title: step.config.title || "Persoonlijke gegevens",
+        labels: ["Vast laatste blok"],
+      };
+    }
+    return {
+      title: null,
+      labels: ["Automatisch uit systeem"],
+    };
   }
 
   if (loading) {
@@ -480,16 +692,29 @@ export function FlowBuilderPage() {
       {activeTab === "builder" ? (
         <div className="panel flow-canvas">
           <div className="flow-track">
-            {steps.map((step, index) => (
+            {steps.map((step, index) => {
+              const summary = stepSummaryParts(step);
+              return (
               <div key={step.key} className="flow-step-wrap">
                 {index > 0 ? (
                   <div className="flow-connector" aria-hidden="true" />
                 ) : null}
                 <div className="flow-step-card">
                   <div className="flow-step-head">
-                    <div>
+                    <div className="flow-step-meta">
                       <strong>{stepTitle(step.type)}</strong>
-                      <p className="muted">{renderStepSummary(step)}</p>
+                      {summary.title ? (
+                        <p className="flow-step-title">{summary.title}</p>
+                      ) : null}
+                      {summary.labels.length > 0 ? (
+                        <div className="flow-step-labels">
+                          {summary.labels.map((label) => (
+                            <span key={label} className="flow-step-label">
+                              {label}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                     <div className="actions">
                       <button
@@ -514,23 +739,28 @@ export function FlowBuilderPage() {
                       </button>
                       <button
                         type="button"
-                        className="btn btn-secondary btn-small"
+                        className="icon-btn"
+                        title="Bewerken"
+                        aria-label="Bewerken"
                         onClick={() => openEdit(step)}
                       >
-                        Bewerken
+                        <IconPencil />
                       </button>
                       <button
                         type="button"
-                        className="btn btn-secondary btn-small"
+                        className="icon-btn"
+                        title="Verwijderen"
+                        aria-label="Verwijderen"
                         onClick={() => removeStep(step.key)}
                       >
-                        Verwijderen
+                        <IconTrash />
                       </button>
                     </div>
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
 
             {steps.length > 0 ? (
               <div className="flow-connector" aria-hidden="true" />
@@ -546,6 +776,34 @@ export function FlowBuilderPage() {
                 Nog geen stappen. Klik op “Voeg stap toe” om te beginnen.
               </p>
             ) : null}
+
+            <div className="flow-connector" aria-hidden="true" />
+            <div className="flow-step-wrap">
+              <div className="flow-step-card flow-step-card-locked">
+                <div className="flow-step-head">
+                  <div className="flow-step-meta">
+                    <strong>{stepTitle("CONFIRMATION")}</strong>
+                    <p className="flow-step-title">
+                      {confirmationStep.config.title || "Persoonlijke gegevens"}
+                    </p>
+                    <div className="flow-step-labels">
+                      <span className="flow-step-label">Vast laatste blok</span>
+                    </div>
+                  </div>
+                  <div className="actions">
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title="Bewerken"
+                      aria-label="Bewerken"
+                      onClick={() => openEdit(confirmationStep)}
+                    >
+                      <IconPencil />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       ) : (
@@ -802,29 +1060,160 @@ export function FlowBuilderPage() {
                   ) : null}
 
                   {draftStep.type === "PRODUCT_SET" ? (
-                    <label>
-                      Product set
-                      <select
-                        value={draftStep.config.productSetId}
-                        onChange={(e) =>
-                          setDraftStep({
-                            ...draftStep,
-                            config: { productSetId: e.target.value },
-                          })
-                        }
-                      >
-                        <option value="">Kies product set…</option>
-                        {productSets.map((set) => (
-                          <option key={set.id} value={set.id}>
-                            {set.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    <div className="stack">
+                      <label>
+                        Titel
+                        <input
+                          value={draftStep.config.title}
+                          onChange={(e) =>
+                            setDraftStep({
+                              ...draftStep,
+                              config: {
+                                ...draftStep.config,
+                                title: e.target.value,
+                              },
+                            })
+                          }
+                          placeholder="bijv. Kies een model"
+                          maxLength={200}
+                        />
+                      </label>
+                      <label>
+                        Product set
+                        <select
+                          value={draftStep.config.productSetId}
+                          onChange={(e) =>
+                            setDraftStep({
+                              ...draftStep,
+                              config: {
+                                ...draftStep.config,
+                                productSetId: e.target.value,
+                              },
+                            })
+                          }
+                        >
+                          <option value="">Kies product set…</option>
+                          {productSets.map((set) => (
+                            <option key={set.id} value={set.id}>
+                              {set.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="switch-row switch-row-compact">
+                        <span className="switch">
+                          <input
+                            type="checkbox"
+                            checked={draftStep.config.allowNoProduct}
+                            onChange={(e) =>
+                              setDraftStep({
+                                ...draftStep,
+                                config: {
+                                  ...draftStep.config,
+                                  allowNoProduct: e.target.checked,
+                                },
+                              })
+                            }
+                          />
+                          <span className="switch-slider" />
+                        </span>
+                        <span>Geen keuze toestaan</span>
+                      </label>
+                      {draftStep.config.allowNoProduct ? (
+                        <div className="stack">
+                          <label>
+                            Titel ‘geen keuze’
+                            <input
+                              value={draftStep.config.noProductTitle}
+                              onChange={(e) =>
+                                setDraftStep({
+                                  ...draftStep,
+                                  config: {
+                                    ...draftStep.config,
+                                    noProductTitle: e.target.value,
+                                  },
+                                })
+                              }
+                              placeholder="bijv. Ik weet het nog niet"
+                              maxLength={120}
+                            />
+                          </label>
+                          <label>
+                            Afbeelding ‘geen keuze’
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) =>
+                                void uploadNoProductImage(
+                                  e.target.files?.[0] ?? null,
+                                )
+                              }
+                            />
+                          </label>
+                          {uploadingOptionIndex === -1 ? (
+                            <p className="muted">Afbeelding uploaden…</p>
+                          ) : null}
+                          {draftStep.config.noProductImageUrl ? (
+                            <div className="stack">
+                              <img
+                                src={draftStep.config.noProductImageUrl}
+                                alt=""
+                                style={{
+                                  maxWidth: 180,
+                                  maxHeight: 100,
+                                  objectFit: "contain",
+                                  border: "1px solid var(--line)",
+                                  borderRadius: 8,
+                                  padding: "0.5rem",
+                                  background: "#fff",
+                                }}
+                              />
+                              <div
+                                className="actions"
+                                style={{ justifyContent: "flex-start" }}
+                              >
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-small"
+                                  onClick={() =>
+                                    setDraftStep({
+                                      ...draftStep,
+                                      config: {
+                                        ...draftStep.config,
+                                        noProductImageUrl: null,
+                                      },
+                                    })
+                                  }
+                                >
+                                  Afbeelding verwijderen
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
                   ) : null}
 
                   {draftStep.type === "LOCATIONS" ? (
                     <div className="stack">
+                      <label>
+                        Titel
+                        <input
+                          value={draftStep.config.title}
+                          onChange={(e) =>
+                            setDraftStep({
+                              ...draftStep,
+                              config: {
+                                ...draftStep.config,
+                                title: e.target.value,
+                              },
+                            })
+                          }
+                          placeholder="bijv. Kies een locatie"
+                          maxLength={200}
+                        />
+                      </label>
                       <label>
                         Locaties
                         <Select
@@ -868,39 +1257,153 @@ export function FlowBuilderPage() {
                         </span>
                         <span>Afbeelding tonen</span>
                       </label>
+                      {draftStep.config.showImage ? (
+                        <label>
+                          Afbeeldingsweergave
+                          <select
+                            value={draftStep.config.imageFit}
+                            onChange={(e) =>
+                              setDraftStep({
+                                ...draftStep,
+                                config: {
+                                  ...draftStep.config,
+                                  imageFit:
+                                    e.target.value === "cover"
+                                      ? "cover"
+                                      : "contain",
+                                },
+                              })
+                            }
+                          >
+                            <option value="contain">
+                              Afbeelding ratio behouden
+                            </option>
+                            <option value="cover">Afbeelding uitvullen</option>
+                          </select>
+                        </label>
+                      ) : null}
                     </div>
                   ) : null}
 
                   {draftStep.type === "CATEGORIES" ? (
-                    <label>
-                      Categorieën
-                      <Select
-                        isMulti
-                        classNamePrefix="rs"
-                        options={categoryOptions}
-                        value={categoryOptions.filter((option) =>
-                          draftStep.config.categoryIds.includes(option.value),
-                        )}
-                        onChange={(selected) =>
-                          setDraftStep({
-                            ...draftStep,
-                            config: {
-                              categoryIds: selected.map(
-                                (option) => option.value,
-                              ),
-                            },
-                          })
-                        }
-                        placeholder="Selecteer categorieën…"
-                        noOptionsMessage={() => "Geen categorieën"}
-                      />
-                    </label>
+                    <div className="stack">
+                      <label>
+                        Titel
+                        <input
+                          value={draftStep.config.title}
+                          onChange={(e) =>
+                            setDraftStep({
+                              ...draftStep,
+                              config: {
+                                ...draftStep.config,
+                                title: e.target.value,
+                              },
+                            })
+                          }
+                          placeholder="bijv. Kies een categorie"
+                          maxLength={200}
+                        />
+                      </label>
+                      <label>
+                        Categorieën
+                        <Select
+                          isMulti
+                          classNamePrefix="rs"
+                          options={categoryOptions}
+                          value={categoryOptions.filter((option) =>
+                            draftStep.config.categoryIds.includes(option.value),
+                          )}
+                          onChange={(selected) =>
+                            setDraftStep({
+                              ...draftStep,
+                              config: {
+                                ...draftStep.config,
+                                categoryIds: selected.map(
+                                  (option) => option.value,
+                                ),
+                              },
+                            })
+                          }
+                          placeholder="Selecteer categorieën…"
+                          noOptionsMessage={() => "Geen categorieën"}
+                        />
+                      </label>
+                      <label className="switch-row switch-row-compact">
+                        <span className="switch">
+                          <input
+                            type="checkbox"
+                            checked={draftStep.config.showImage}
+                            onChange={(e) =>
+                              setDraftStep({
+                                ...draftStep,
+                                config: {
+                                  ...draftStep.config,
+                                  showImage: e.target.checked,
+                                },
+                              })
+                            }
+                          />
+                          <span className="switch-slider" />
+                        </span>
+                        <span>Afbeelding tonen</span>
+                      </label>
+                      {draftStep.config.showImage ? (
+                        <label>
+                          Afbeeldingsweergave
+                          <select
+                            value={draftStep.config.imageFit}
+                            onChange={(e) =>
+                              setDraftStep({
+                                ...draftStep,
+                                config: {
+                                  ...draftStep.config,
+                                  imageFit:
+                                    e.target.value === "cover"
+                                      ? "cover"
+                                      : "contain",
+                                },
+                              })
+                            }
+                          >
+                            <option value="contain">
+                              Afbeelding ratio behouden
+                            </option>
+                            <option value="cover">Afbeelding uitvullen</option>
+                          </select>
+                        </label>
+                      ) : null}
+                    </div>
                   ) : null}
 
                   {draftStep.type === "SELLERS_AGENDA" ? (
                     <div className="info-box">
                       De beschikbare verkopers worden automatisch opgehaald uit
                       het systeem.
+                    </div>
+                  ) : null}
+
+                  {draftStep.type === "CONFIRMATION" ? (
+                    <div className="stack">
+                      <div className="info-box">
+                        Dit blok staat altijd vast onderaan de flow. Pas hier de
+                        titel boven het bevestigingsformulier aan.
+                      </div>
+                      <label>
+                        Formuliertitel
+                        <input
+                          value={draftStep.config.title}
+                          onChange={(e) =>
+                            setDraftStep({
+                              ...draftStep,
+                              config: {
+                                ...draftStep.config,
+                                title: e.target.value,
+                              },
+                            })
+                          }
+                          placeholder="Persoonlijke gegevens"
+                        />
+                      </label>
                     </div>
                   ) : null}
 

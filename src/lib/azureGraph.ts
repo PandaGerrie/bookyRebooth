@@ -287,6 +287,77 @@ export type HourlyAvailability = {
   slots: Array<HourlySlot & { available: boolean }>;
 };
 
+export type CreateCalendarEventInput = {
+  sellerEmail: string;
+  subject: string;
+  bodyHtml?: string;
+  date: string;
+  start: string;
+  end: string;
+  locationName: string;
+  locationAddress?: string | null;
+};
+
+export type CreateCalendarEventResult = {
+  id: string;
+  webLink?: string;
+};
+
+export async function createCalendarEvent(
+  input: CreateCalendarEventInput,
+): Promise<CreateCalendarEventResult> {
+  const token = await getAccessToken();
+  const locationDisplay = [input.locationName, input.locationAddress]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(" — ");
+
+  const response = await fetch(
+    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(input.sellerEmail)}/events`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        subject: input.subject,
+        body: {
+          contentType: "HTML",
+          content: input.bodyHtml || "",
+        },
+        start: {
+          dateTime: toGraphDateTime(input.date, input.start),
+          timeZone: env.AZURE_TIMEZONE,
+        },
+        end: {
+          dateTime: toGraphDateTime(input.date, input.end),
+          timeZone: env.AZURE_TIMEZONE,
+        },
+        location: {
+          displayName: locationDisplay || input.locationName,
+        },
+        isReminderOn: true,
+        reminderMinutesBeforeStart: 15,
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(
+      `Graph event aanmaken mislukt (${response.status}): ${text}`,
+    );
+  }
+
+  const data = (await response.json()) as { id?: string; webLink?: string };
+  if (!data.id) {
+    throw new Error("Graph event aanmaken mislukt: geen event-id");
+  }
+
+  return { id: data.id, webLink: data.webLink };
+}
+
 /** Check multiple hourly slots in one Graph call (window = earliest start → latest end). */
 export async function checkHourlyAvailability(
   emails: string[],

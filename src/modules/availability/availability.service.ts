@@ -27,25 +27,33 @@ function minutesToTime(total: number) {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
+/**
+ * Starts every `stepMinutes` (default 30), each appointment lasts
+ * `appointmentMinutes` (default 60).
+ */
 export function buildHourlySlots(
   workStart: string,
   workEnd: string,
   dayStartHour: number,
+  stepMinutes = 30,
+  appointmentMinutes = 60,
 ): HourlySlot[] {
+  const step = Math.max(15, stepMinutes);
+  const duration = Math.max(step, appointmentMinutes);
   const dayStart = dayStartHour * 60;
   let slotStart = Math.max(dayStart, timeToMinutes(workStart));
-  if (slotStart % 60 !== 0) {
-    slotStart = Math.ceil(slotStart / 60) * 60;
+  if (slotStart % step !== 0) {
+    slotStart = Math.ceil(slotStart / step) * step;
   }
   const end = timeToMinutes(workEnd);
   const slots: HourlySlot[] = [];
 
-  while (slotStart + 60 <= end) {
+  while (slotStart + duration <= end) {
     slots.push({
       start: minutesToTime(slotStart),
-      end: minutesToTime(slotStart + 60),
+      end: minutesToTime(slotStart + duration),
     });
-    slotStart += 60;
+    slotStart += step;
   }
 
   return slots;
@@ -63,7 +71,7 @@ export type AvailabilitySlotsResult = {
   date: string;
   weekday: Weekday;
   dayStartHour: number;
-  location: { id: string; name: string; permalink: string };
+  location: { id: string; name: string; permalink: string; address: string };
   category: { id: string; name: string; slug: string };
   sellers: Array<{
     sellerId: string;
@@ -115,6 +123,7 @@ export async function getAvailabilitySlots(
       id: true,
       name: true,
       permalink: true,
+      address: true,
       entityId: true,
     },
   });
@@ -262,6 +271,7 @@ export async function getAvailabilitySlots(
         id: location.id,
         name: location.name,
         permalink: location.permalink,
+        address: location.address,
       },
       category: {
         id: category.id,

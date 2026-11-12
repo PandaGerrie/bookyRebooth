@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
-import { api } from "../api/client";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { api, uploadMedia } from "../api/client";
 import type { Entity } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 
-type SettingsTab = "content" | "domain" | "sellers";
+type SettingsTab = "content" | "domain" | "tracking" | "sellers";
 
 type SellerConnection = {
   sellerId: string;
@@ -29,6 +29,7 @@ type AvailabilityRow = {
 const TABS: Array<{ id: SettingsTab; label: string }> = [
   { id: "content", label: "Algemene content" },
   { id: "domain", label: "Domeininstellingen" },
+  { id: "tracking", label: "Tracking" },
   { id: "sellers", label: "Verkopersconnecties" },
 ];
 
@@ -64,6 +65,32 @@ export function GeneralSettingsPage() {
   >(null);
   const [availableCount, setAvailableCount] = useState(0);
   const [checkedCount, setCheckedCount] = useState(0);
+  const [domainValue, setDomainValue] = useState("");
+  const [domainEntityName, setDomainEntityName] = useState("");
+  const [loadingDomain, setLoadingDomain] = useState(false);
+  const [savingDomain, setSavingDomain] = useState(false);
+  const [logoUrl, setLogoUrl] = useState("");
+  const [introText, setIntroText] = useState("");
+  const [primaryColor, setPrimaryColor] = useState("#121417");
+  const [secondaryColor, setSecondaryColor] = useState("#667085");
+  const [accentColor, setAccentColor] = useState("#2766ab");
+  const [contentEntityName, setContentEntityName] = useState("");
+  const [loadingContent, setLoadingContent] = useState(false);
+  const [savingContent, setSavingContent] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [gtmId, setGtmId] = useState("");
+  const [headerScripts, setHeaderScripts] = useState("");
+  const [footerScripts, setFooterScripts] = useState("");
+  const [trackingEntityName, setTrackingEntityName] = useState("");
+  const [loadingTracking, setLoadingTracking] = useState(false);
+  const [savingTracking, setSavingTracking] = useState(false);
+
+  const mediaEntityKey = useMemo(() => {
+    if (!isSuper) return user?.entity?.slug || "global";
+    return (
+      entities.find((entity) => entity.id === entityId)?.slug || "global"
+    );
+  }, [isSuper, user?.entity?.slug, entities, entityId]);
 
   useEffect(() => {
     if (!isSuper) return;
@@ -130,6 +157,259 @@ export function GeneralSettingsPage() {
       cancelled = true;
     };
   }, [activeTab, isSuper, entityId]);
+
+  useEffect(() => {
+    if (activeTab !== "content") return;
+    if (isSuper && !entityId) return;
+
+    let cancelled = false;
+
+    async function loadContent() {
+      setLoadingContent(true);
+      setError(null);
+      try {
+        const query =
+          isSuper && entityId
+            ? `?entityId=${encodeURIComponent(entityId)}`
+            : "";
+        const data = await api<{
+          entity: {
+            name: string;
+            logoUrl: string | null;
+            introText: string | null;
+            primaryColor: string | null;
+            secondaryColor: string | null;
+            accentColor: string | null;
+          };
+        }>(`/settings/content${query}`);
+        if (cancelled) return;
+        setLogoUrl(data.entity.logoUrl || "");
+        setIntroText(data.entity.introText || "");
+        setPrimaryColor(data.entity.primaryColor || "#121417");
+        setSecondaryColor(data.entity.secondaryColor || "#667085");
+        setAccentColor(data.entity.accentColor || "#2766ab");
+        setContentEntityName(data.entity.name);
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err.message : "Content laden mislukt",
+          );
+        }
+      } finally {
+        if (!cancelled) setLoadingContent(false);
+      }
+    }
+
+    void loadContent();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, isSuper, entityId]);
+
+  useEffect(() => {
+    if (activeTab !== "tracking") return;
+    if (isSuper && !entityId) return;
+
+    let cancelled = false;
+
+    async function loadTracking() {
+      setLoadingTracking(true);
+      setError(null);
+      try {
+        const query =
+          isSuper && entityId
+            ? `?entityId=${encodeURIComponent(entityId)}`
+            : "";
+        const data = await api<{
+          entity: {
+            name: string;
+            gtmId: string | null;
+            headerScripts: string | null;
+            footerScripts: string | null;
+          };
+        }>(`/settings/tracking${query}`);
+        if (cancelled) return;
+        setGtmId(data.entity.gtmId || "");
+        setHeaderScripts(data.entity.headerScripts || "");
+        setFooterScripts(data.entity.footerScripts || "");
+        setTrackingEntityName(data.entity.name);
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err.message : "Tracking laden mislukt",
+          );
+        }
+      } finally {
+        if (!cancelled) setLoadingTracking(false);
+      }
+    }
+
+    void loadTracking();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, isSuper, entityId]);
+
+  useEffect(() => {
+    if (activeTab !== "domain") return;
+    if (isSuper && !entityId) return;
+
+    let cancelled = false;
+
+    async function loadDomain() {
+      setLoadingDomain(true);
+      setError(null);
+      try {
+        const query =
+          isSuper && entityId
+            ? `?entityId=${encodeURIComponent(entityId)}`
+            : "";
+        const data = await api<{
+          entity: { name: string; slug: string; domain: string | null };
+        }>(`/settings/domain${query}`);
+        if (cancelled) return;
+        setDomainValue(data.entity.domain || "");
+        setDomainEntityName(data.entity.name);
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err.message : "Domein laden mislukt",
+          );
+        }
+      } finally {
+        if (!cancelled) setLoadingDomain(false);
+      }
+    }
+
+    void loadDomain();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, isSuper, entityId]);
+
+  async function onLogoChange(file: File | null) {
+    if (!file) return;
+    setUploadingLogo(true);
+    setError(null);
+    try {
+      const url = await uploadMedia(file, mediaEntityKey);
+      setLogoUrl(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Logo upload mislukt");
+    } finally {
+      setUploadingLogo(false);
+    }
+  }
+
+  async function saveContent(event: FormEvent) {
+    event.preventDefault();
+    if (isSuper && !entityId) {
+      setError("Kies een entiteit");
+      return;
+    }
+
+    setSavingContent(true);
+    setError(null);
+    try {
+      const data = await api<{
+        entity: {
+          name: string;
+          logoUrl: string | null;
+          introText: string | null;
+          primaryColor: string | null;
+          secondaryColor: string | null;
+          accentColor: string | null;
+        };
+      }>("/settings/content", {
+        method: "PATCH",
+        body: JSON.stringify({
+          logoUrl: logoUrl || null,
+          introText: introText.trim() || null,
+          primaryColor: primaryColor || null,
+          secondaryColor: secondaryColor || null,
+          accentColor: accentColor || null,
+          ...(isSuper ? { entityId } : {}),
+        }),
+      });
+      setLogoUrl(data.entity.logoUrl || "");
+      setIntroText(data.entity.introText || "");
+      setPrimaryColor(data.entity.primaryColor || "#121417");
+      setSecondaryColor(data.entity.secondaryColor || "#667085");
+      setAccentColor(data.entity.accentColor || "#2766ab");
+      setContentEntityName(data.entity.name);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Content opslaan mislukt");
+    } finally {
+      setSavingContent(false);
+    }
+  }
+
+  async function saveDomain(event: FormEvent) {
+    event.preventDefault();
+    if (isSuper && !entityId) {
+      setError("Kies een entiteit");
+      return;
+    }
+
+    setSavingDomain(true);
+    setError(null);
+    try {
+      const data = await api<{
+        entity: { name: string; domain: string | null };
+      }>("/settings/domain", {
+        method: "PATCH",
+        body: JSON.stringify({
+          domain: domainValue,
+          ...(isSuper ? { entityId } : {}),
+        }),
+      });
+      setDomainValue(data.entity.domain || "");
+      setDomainEntityName(data.entity.name);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Domein opslaan mislukt");
+    } finally {
+      setSavingDomain(false);
+    }
+  }
+
+  async function saveTracking(event: FormEvent) {
+    event.preventDefault();
+    if (isSuper && !entityId) {
+      setError("Kies een entiteit");
+      return;
+    }
+
+    setSavingTracking(true);
+    setError(null);
+    try {
+      const data = await api<{
+        entity: {
+          name: string;
+          gtmId: string | null;
+          headerScripts: string | null;
+          footerScripts: string | null;
+        };
+      }>("/settings/tracking", {
+        method: "PATCH",
+        body: JSON.stringify({
+          gtmId: gtmId.trim() || null,
+          headerScripts: headerScripts.trim() || null,
+          footerScripts: footerScripts.trim() || null,
+          ...(isSuper ? { entityId } : {}),
+        }),
+      });
+      setGtmId(data.entity.gtmId || "");
+      setHeaderScripts(data.entity.headerScripts || "");
+      setFooterScripts(data.entity.footerScripts || "");
+      setTrackingEntityName(data.entity.name);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Tracking opslaan mislukt",
+      );
+    } finally {
+      setSavingTracking(false);
+    }
+  }
 
   async function runAvailabilityTest() {
     if (isSuper && !entityId) {
@@ -371,9 +651,322 @@ export function GeneralSettingsPage() {
             </div>
           </div>
         </div>
+      ) : activeTab === "domain" ? (
+        <div className="stack">
+          {isSuper ? (
+            <label style={{ maxWidth: 320 }}>
+              Entiteit
+              <select
+                value={entityId}
+                onChange={(e) => setEntityId(e.target.value)}
+              >
+                <option value="">Kies entiteit…</option>
+                {entities.map((entity) => (
+                  <option key={entity.id} value={entity.id}>
+                    {entity.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
+          {error ? <p className="error">{error}</p> : null}
+
+          <div className="panel">
+            {loadingDomain ? (
+              <div className="empty">Laden…</div>
+            ) : (
+              <form className="panel-body stack" onSubmit={saveDomain}>
+                <div>
+                  <h2 style={{ marginBottom: "0.35rem" }}>
+                    Domeininstellingen
+                  </h2>
+                  <p className="muted">
+                    Het toegestane domein voor de booking tool van{" "}
+                    {domainEntityName || "deze entiteit"}. Leeg laten = geen
+                    domeinrestrictie (handig tijdens development).
+                  </p>
+                </div>
+                <label style={{ maxWidth: 420 }}>
+                  Domein
+                  <input
+                    value={domainValue}
+                    onChange={(e) => setDomainValue(e.target.value)}
+                    placeholder="bijv. booking.belien.be"
+                  />
+                </label>
+                <div className="actions" style={{ justifyContent: "flex-start" }}>
+                  <button
+                    type="submit"
+                    className="btn"
+                    disabled={savingDomain || (isSuper && !entityId)}
+                  >
+                    {savingDomain ? "Opslaan…" : "Opslaan"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      ) : activeTab === "tracking" ? (
+        <div className="stack">
+          {isSuper ? (
+            <label style={{ maxWidth: 320 }}>
+              Entiteit
+              <select
+                value={entityId}
+                onChange={(e) => setEntityId(e.target.value)}
+              >
+                <option value="">Kies entiteit…</option>
+                {entities.map((entity) => (
+                  <option key={entity.id} value={entity.id}>
+                    {entity.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
+          {error ? <p className="error">{error}</p> : null}
+
+          <div className="panel">
+            {loadingTracking ? (
+              <div className="empty">Laden…</div>
+            ) : (
+              <form className="panel-body stack" onSubmit={saveTracking}>
+                <div>
+                  <h2 style={{ marginBottom: "0.35rem" }}>Tracking</h2>
+                  <p className="muted">
+                    Tracking en scripts voor de booking tool van{" "}
+                    {trackingEntityName || "deze entiteit"}. Deze waarden gelden
+                    enkel voor deze entiteit.
+                  </p>
+                </div>
+
+                <label style={{ maxWidth: 420 }}>
+                  GTM ID
+                  <input
+                    value={gtmId}
+                    onChange={(e) => setGtmId(e.target.value)}
+                    placeholder="GTM-XXXXXXX"
+                    spellCheck={false}
+                  />
+                </label>
+
+                <label>
+                  Header scripts
+                  <textarea
+                    className="code-field"
+                    rows={10}
+                    value={headerScripts}
+                    onChange={(e) => setHeaderScripts(e.target.value)}
+                    placeholder={"<!-- bv. meta pixels / extra head scripts -->"}
+                    spellCheck={false}
+                  />
+                </label>
+
+                <label>
+                  Footer scripts
+                  <textarea
+                    className="code-field"
+                    rows={10}
+                    value={footerScripts}
+                    onChange={(e) => setFooterScripts(e.target.value)}
+                    placeholder={"<!-- scripts net vóór </body> -->"}
+                    spellCheck={false}
+                  />
+                </label>
+
+                <div className="actions" style={{ justifyContent: "flex-start" }}>
+                  <button
+                    type="submit"
+                    className="btn"
+                    disabled={savingTracking || (isSuper && !entityId)}
+                  >
+                    {savingTracking ? "Opslaan…" : "Opslaan"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
       ) : (
-        <div className="panel">
-          <div className="empty">Meer instellingen volgen later.</div>
+        <div className="stack">
+          {isSuper ? (
+            <label style={{ maxWidth: 320 }}>
+              Entiteit
+              <select
+                value={entityId}
+                onChange={(e) => setEntityId(e.target.value)}
+              >
+                <option value="">Kies entiteit…</option>
+                {entities.map((entity) => (
+                  <option key={entity.id} value={entity.id}>
+                    {entity.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
+          {error && activeTab === "content" ? (
+            <p className="error">{error}</p>
+          ) : null}
+
+          {loadingContent ? (
+            <div className="panel">
+              <div className="empty">Laden…</div>
+            </div>
+          ) : (
+            <form className="stack" onSubmit={saveContent}>
+              <p className="muted" style={{ margin: 0 }}>
+                Content voor de booking tool van{" "}
+                {contentEntityName || "deze entiteit"}.
+              </p>
+
+              <div className="settings-blocks">
+                <details className="settings-block" open>
+                  <summary>
+                    <span>Algemeen</span>
+                    <span className="settings-block-chevron" aria-hidden="true">
+                      ▾
+                    </span>
+                  </summary>
+                  <div className="settings-block-body stack">
+                    <label style={{ maxWidth: 420 }}>
+                      Logo
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) =>
+                          void onLogoChange(e.target.files?.[0] ?? null)
+                        }
+                      />
+                    </label>
+                    {uploadingLogo ? (
+                      <p className="muted">Logo uploaden…</p>
+                    ) : null}
+                    {logoUrl ? (
+                      <div className="stack">
+                        <img
+                          src={logoUrl}
+                          alt="Logo"
+                          style={{
+                            maxWidth: 220,
+                            maxHeight: 80,
+                            objectFit: "contain",
+                            border: "1px solid var(--line)",
+                            borderRadius: 8,
+                            padding: "0.5rem",
+                            background: "#fff",
+                          }}
+                        />
+                        <div
+                          className="actions"
+                          style={{ justifyContent: "flex-start" }}
+                        >
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-small"
+                            onClick={() => setLogoUrl("")}
+                          >
+                            Logo verwijderen
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <label style={{ maxWidth: 520 }}>
+                      Openingszin
+                      <textarea
+                        value={introText}
+                        onChange={(e) => setIntroText(e.target.value)}
+                        rows={3}
+                        maxLength={500}
+                        placeholder="bijv. Kies een bookingflow om te starten"
+                      />
+                    </label>
+                  </div>
+                </details>
+
+                <details className="settings-block" open>
+                  <summary>
+                    <span>Stijlen</span>
+                    <span className="settings-block-chevron" aria-hidden="true">
+                      ▾
+                    </span>
+                  </summary>
+                  <div className="settings-block-body stack">
+                    <div className="color-fields">
+                      <label>
+                        Hoofdkleur
+                        <span className="color-field">
+                          <input
+                            type="color"
+                            value={primaryColor}
+                            onChange={(e) => setPrimaryColor(e.target.value)}
+                          />
+                          <input
+                            type="text"
+                            value={primaryColor}
+                            onChange={(e) => setPrimaryColor(e.target.value)}
+                            maxLength={7}
+                            placeholder="#121417"
+                          />
+                        </span>
+                      </label>
+                      <label>
+                        Steunkleur
+                        <span className="color-field">
+                          <input
+                            type="color"
+                            value={secondaryColor}
+                            onChange={(e) => setSecondaryColor(e.target.value)}
+                          />
+                          <input
+                            type="text"
+                            value={secondaryColor}
+                            onChange={(e) => setSecondaryColor(e.target.value)}
+                            maxLength={7}
+                            placeholder="#667085"
+                          />
+                        </span>
+                      </label>
+                      <label>
+                        Accentkleur
+                        <span className="color-field">
+                          <input
+                            type="color"
+                            value={accentColor}
+                            onChange={(e) => setAccentColor(e.target.value)}
+                          />
+                          <input
+                            type="text"
+                            value={accentColor}
+                            onChange={(e) => setAccentColor(e.target.value)}
+                            maxLength={7}
+                            placeholder="#2766ab"
+                          />
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                </details>
+              </div>
+
+              <div className="actions" style={{ justifyContent: "flex-start" }}>
+                <button
+                  type="submit"
+                  className="btn"
+                  disabled={
+                    savingContent || uploadingLogo || (isSuper && !entityId)
+                  }
+                >
+                  {savingContent ? "Opslaan…" : "Opslaan"}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       )}
     </div>

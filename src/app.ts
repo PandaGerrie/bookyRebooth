@@ -13,6 +13,7 @@ import { categoriesRouter } from "./modules/categories/categories.routes.js";
 import { sellersRouter } from "./modules/sellers/sellers.routes.js";
 import { sellerConnectionsRouter } from "./modules/sellerConnections/sellerConnections.routes.js";
 import { publicRouter } from "./modules/public/public.routes.js";
+import { settingsRouter } from "./modules/settings/settings.routes.js";
 import { flowsRouter } from "./modules/flows/flows.routes.js";
 import { mediaRouter } from "./modules/media/media.routes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -49,6 +50,7 @@ export function createApp() {
   app.use("/api/sellers", sellersRouter);
   app.use("/api/seller-connections", sellerConnectionsRouter);
   app.use("/api/public", publicRouter);
+  app.use("/api/settings", settingsRouter);
   app.use("/api/flows", flowsRouter);
   app.use("/api/media", mediaRouter);
 

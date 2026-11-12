@@ -14,20 +14,55 @@ const freeChoiceConfigSchema = z.object({
   options: z.array(freeChoiceOptionSchema).min(1),
 });
 
-const productSetConfigSchema = z.object({
-  productSetId: z.string().cuid(),
-});
+const stepTitleSchema = z
+  .string()
+  .max(200)
+  .optional()
+  .transform((value) => (value ?? "").trim());
+
+const productSetConfigSchema = z
+  .object({
+    title: stepTitleSchema,
+    productSetId: z.string().cuid(),
+    allowNoProduct: z.boolean().optional().default(false),
+    noProductTitle: z
+      .string()
+      .max(120)
+      .optional()
+      .transform((value) => (value ?? "").trim()),
+    noProductImageUrl: z.string().min(1).nullable().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.allowNoProduct && !value.noProductTitle) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Titel voor ‘geen keuze’ is verplicht",
+        path: ["noProductTitle"],
+      });
+    }
+  });
+
+const imageFitSchema = z.enum(["contain", "cover"]).optional().default("contain");
 
 const locationsConfigSchema = z.object({
+  title: stepTitleSchema,
   locationIds: z.array(z.string().cuid()).min(1),
   showImage: z.boolean().optional().default(true),
+  imageFit: imageFitSchema,
 });
 
 const categoriesConfigSchema = z.object({
+  title: stepTitleSchema,
   categoryIds: z.array(z.string().cuid()).min(1),
+  showImage: z.boolean().optional().default(true),
+  imageFit: imageFitSchema,
 });
 
 const sellersAgendaConfigSchema = z.object({}).strict();
+
+const confirmationConfigSchema = z.object({
+  title: stepTitleSchema,
+});
 
 const stepSchema = z.discriminatedUnion("type", [
   z.object({
@@ -49,6 +84,10 @@ const stepSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("SELLERS_AGENDA"),
     config: sellersAgendaConfigSchema,
+  }),
+  z.object({
+    type: z.literal("CONFIRMATION"),
+    config: confirmationConfigSchema,
   }),
 ]);
 
@@ -77,4 +116,9 @@ export const updateFlowSchema = z.object({
 
 export const patchFlowActiveSchema = z.object({
   active: z.boolean(),
+});
+
+export const reorderFlowsSchema = z.object({
+  orderedIds: z.array(z.string().cuid()).min(1),
+  entityId: z.string().cuid().optional(),
 });

@@ -28,13 +28,23 @@ enum FlowStepType {
   LOCATIONS
   CATEGORIES
   SELLERS_AGENDA
+  CONFIRMATION
 }
 
 model Entity {
   id         String     @id @default(cuid())
   name       String
   slug       String     @unique
-  active     Boolean    @default(true)
+  domain     String?
+  logoUrl         String?    @db.Text
+  introText       String?    @db.VarChar(500)
+  primaryColor    String?    @db.VarChar(7)
+  secondaryColor  String?    @db.VarChar(7)
+  accentColor     String?    @db.VarChar(7)
+  gtmId           String?    @db.VarChar(32)
+  headerScripts   String?    @db.LongText
+  footerScripts   String?    @db.LongText
+  active          Boolean    @default(true)
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
   users      User[]
@@ -155,6 +165,7 @@ model Flow {
   slug          String
   featuredImage String?    @db.Text
   active        Boolean    @default(true)
+  sortOrder     Int        @default(0)
   entityId      String
   entity        Entity     @relation(fields: [entityId], references: [id], onDelete: Cascade)
   steps         FlowStep[]
@@ -163,6 +174,7 @@ model Flow {
 
   @@unique([entityId, slug])
   @@index([entityId])
+  @@index([entityId, sortOrder])
 }
 
 model FlowStep {

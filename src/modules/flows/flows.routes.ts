@@ -8,6 +8,7 @@ import {
 import {
   createFlowSchema,
   patchFlowActiveSchema,
+  reorderFlowsSchema,
   updateFlowSchema,
 } from "./flows.schemas.js";
 
@@ -127,7 +128,64 @@ flowsRouter.get("/", async (req, res, next) => {
 
     const flows = await prisma.flow.findMany({
       where: filter.entityId ? { entityId: filter.entityId } : undefined,
-      orderBy: { updatedAt: "desc" },
+      orderBy: [
+        { sortOrder: "asc" },
+        { createdAt: "asc" },
+        { name: "asc" },
+      ],
+      include: {
+        entity: { select: { id: true, name: true, slug: true } },
+        _count: { select: { steps: true } },
+      },
+    });
+
+    res.json({ flows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+flowsRouter.put("/reorder", async (req, res, next) => {
+  try {
+    const body = reorderFlowsSchema.parse(req.body);
+    const scope = resolveEntityIdForWrite(req.user!, body.entityId);
+
+    if ("error" in scope) {
+      res.status(scope.status).json({ error: scope.error });
+      return;
+    }
+
+    const existing = await prisma.flow.findMany({
+      where: {
+        entityId: scope.entityId,
+        id: { in: body.orderedIds },
+      },
+      select: { id: true },
+    });
+
+    if (existing.length !== body.orderedIds.length) {
+      res.status(400).json({
+        error: "Een of meer flows horen niet bij deze entiteit",
+      });
+      return;
+    }
+
+    await prisma.$transaction(
+      body.orderedIds.map((id, index) =>
+        prisma.flow.update({
+          where: { id },
+          data: { sortOrder: index },
+        }),
+      ),
+    );
+
+    const flows = await prisma.flow.findMany({
+      where: { entityId: scope.entityId },
+      orderBy: [
+        { sortOrder: "asc" },
+        { createdAt: "asc" },
+        { name: "asc" },
+      ],
       include: {
         entity: { select: { id: true, name: true, slug: true } },
         _count: { select: { steps: true } },
@@ -197,12 +255,19 @@ flowsRouter.post("/", async (req, res, next) => {
       `flow-${Date.now().toString(36)}`;
     const slug = await uniqueFlowSlug(scope.entityId, baseSlug);
 
+    const maxSort = await prisma.flow.aggregate({
+      where: { entityId: scope.entityId },
+      _max: { sortOrder: true },
+    });
+    const nextSortOrder = (maxSort._max.sortOrder ?? -1) + 1;
+
     const flow = await prisma.flow.create({
       data: {
         name: body.name,
         slug,
         featuredImage: body.featuredImage ?? null,
         active: body.active,
+        sortOrder: nextSortOrder,
         entityId: scope.entityId,
         steps: {
           create: body.steps.map((step, index) => ({

@@ -4,6 +4,34 @@ import { api } from "../api/client";
 import type { Entity, Flow } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 
+function IconChevronUp() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M4 10L8 6L12 10"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IconChevronDown() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M4 6L8 10L12 6"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function FlowsOverviewPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -14,6 +42,7 @@ export function FlowsOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [reorderingId, setReorderingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -113,6 +142,50 @@ export function FlowsOverviewPage() {
     }
   }
 
+  async function moveFlow(flow: Flow, direction: -1 | 1) {
+    const siblings = flows.filter((item) => item.entityId === flow.entityId);
+    const index = siblings.findIndex((item) => item.id === flow.id);
+    const targetIndex = index + direction;
+    if (index < 0 || targetIndex < 0 || targetIndex >= siblings.length) return;
+
+    const orderedIds = siblings.map((item) => item.id);
+    const swapId = orderedIds[targetIndex]!;
+    orderedIds[targetIndex] = orderedIds[index]!;
+    orderedIds[index] = swapId;
+
+    const previous = flows;
+    const reorderedSiblings: Flow[] = orderedIds.flatMap((id, sortOrder) => {
+      const item = siblings.find((flowItem) => flowItem.id === id);
+      return item ? [{ ...item, sortOrder }] : [];
+    });
+
+    setFlows((prev) => {
+      const others = prev.filter((item) => item.entityId !== flow.entityId);
+      return [...others, ...reorderedSiblings];
+    });
+    setReorderingId(flow.id);
+    setError(null);
+
+    try {
+      const data = await api<{ flows: Flow[] }>("/flows/reorder", {
+        method: "PUT",
+        body: JSON.stringify({
+          orderedIds,
+          ...(isSuper ? { entityId: flow.entityId } : {}),
+        }),
+      });
+      setFlows((prev) => {
+        const others = prev.filter((item) => item.entityId !== flow.entityId);
+        return [...others, ...data.flows];
+      });
+    } catch (err) {
+      setFlows(previous);
+      setError(err instanceof Error ? err.message : "Volgorde wijzigen mislukt");
+    } finally {
+      setReorderingId(null);
+    }
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -162,6 +235,7 @@ export function FlowsOverviewPage() {
           <table className="table">
             <thead>
               <tr>
+                <th style={{ width: 88 }}>Volgorde</th>
                 <th>Naam</th>
                 <th>Slug</th>
                 <th>Status</th>
@@ -171,88 +245,120 @@ export function FlowsOverviewPage() {
               </tr>
             </thead>
             <tbody>
-              {flows.map((flow) => (
-                <tr key={flow.id}>
-                  <td>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.75rem",
-                      }}
-                    >
-                      {flow.featuredImage ? (
-                        <img
-                          src={flow.featuredImage}
-                          alt=""
-                          style={{
-                            width: 40,
-                            height: 40,
-                            objectFit: "cover",
-                            borderRadius: 6,
-                            border: "1px solid var(--line)",
-                          }}
-                        />
-                      ) : (
-                        <div
-                          aria-hidden="true"
-                          style={{
-                            width: 40,
-                            height: 40,
-                            borderRadius: 6,
-                            border: "1px solid var(--line)",
-                            background: "var(--surface-2, #f3f3f3)",
-                            flexShrink: 0,
-                          }}
-                        />
-                      )}
-                      <span>{flow.name}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <span className="badge">{flow.slug || "—"}</span>
-                  </td>
-                  <td>
-                    <label className="switch-row switch-row-compact">
-                      <span className="switch">
-                        <input
-                          type="checkbox"
-                          checked={flow.active}
-                          onChange={() => void toggleActive(flow)}
-                          aria-label={
-                            flow.active ? "Deactiveer flow" : "Activeer flow"
-                          }
-                        />
-                        <span className="switch-slider" />
-                      </span>
-                      <span className="muted">
-                        {flow.active ? "Actief" : "Inactief"}
-                      </span>
-                    </label>
-                  </td>
-                  {isSuper ? <td>{flow.entity?.name ?? "—"}</td> : null}
-                  <td>
-                    <span className="badge">{flow._count?.steps ?? 0}</span>
-                  </td>
-                  <td>
-                    <div className="actions">
-                      <Link
-                        className="btn btn-secondary btn-small"
-                        to={`/new-flow/${flow.id}`}
+              {flows.map((flow) => {
+                const siblings = flows.filter(
+                  (item) => item.entityId === flow.entityId,
+                );
+                const index = siblings.findIndex((item) => item.id === flow.id);
+                const busy = reorderingId === flow.id;
+
+                return (
+                  <tr key={flow.id}>
+                    <td>
+                      <div className="actions" style={{ gap: "0.25rem" }}>
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="Omhoog"
+                          aria-label="Omhoog"
+                          disabled={busy || index <= 0}
+                          onClick={() => void moveFlow(flow, -1)}
+                        >
+                          <IconChevronUp />
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="Omlaag"
+                          aria-label="Omlaag"
+                          disabled={busy || index >= siblings.length - 1}
+                          onClick={() => void moveFlow(flow, 1)}
+                        >
+                          <IconChevronDown />
+                        </button>
+                      </div>
+                    </td>
+                    <td>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.75rem",
+                        }}
                       >
-                        Bewerken
-                      </Link>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        onClick={() => void onDelete(flow.id)}
-                      >
-                        Verwijderen
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        {flow.featuredImage ? (
+                          <img
+                            src={flow.featuredImage}
+                            alt=""
+                            style={{
+                              width: 40,
+                              height: 40,
+                              objectFit: "cover",
+                              borderRadius: 6,
+                              border: "1px solid var(--line)",
+                            }}
+                          />
+                        ) : (
+                          <div
+                            aria-hidden="true"
+                            style={{
+                              width: 40,
+                              height: 40,
+                              borderRadius: 6,
+                              border: "1px solid var(--line)",
+                              background: "var(--surface-2, #f3f3f3)",
+                              flexShrink: 0,
+                            }}
+                          />
+                        )}
+                        <span>{flow.name}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="badge">{flow.slug || "—"}</span>
+                    </td>
+                    <td>
+                      <label className="switch-row switch-row-compact">
+                        <span className="switch">
+                          <input
+                            type="checkbox"
+                            checked={flow.active}
+                            onChange={() => void toggleActive(flow)}
+                            aria-label={
+                              flow.active ? "Deactiveer flow" : "Activeer flow"
+                            }
+                          />
+                          <span className="switch-slider" />
+                        </span>
+                        <span className="muted">
+                          {flow.active ? "Actief" : "Inactief"}
+                        </span>
+                      </label>
+                    </td>
+                    {isSuper ? <td>{flow.entity?.name ?? "—"}</td> : null}
+                    <td>
+                      <span className="badge">{flow._count?.steps ?? 0}</span>
+                    </td>
+                    <td>
+                      <div className="actions">
+                        <Link
+                          className="btn btn-secondary btn-small"
+                          to={`/new-flow/${flow.id}`}
+                        >
+                          Bewerken
+                        </Link>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-small"
+                          onClick={() => void onDelete(flow.id)}
+                        >
+                          Verwijderen
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
