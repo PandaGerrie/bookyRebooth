@@ -19,6 +19,7 @@ const entitySettingsSelect = {
   domain: true,
   logoUrl: true,
   introText: true,
+  emailExtraTxt: true,
   primaryColor: true,
   secondaryColor: true,
   accentColor: true,
@@ -119,6 +120,9 @@ settingsRouter.patch("/content", async (req, res, next) => {
       data: {
         logoUrl: body.logoUrl,
         introText: body.introText?.trim() ? body.introText.trim() : null,
+        emailExtraTxt: body.emailExtraTxt?.trim()
+          ? body.emailExtraTxt
+          : null,
         primaryColor: body.primaryColor,
         secondaryColor: body.secondaryColor,
         accentColor: body.accentColor,

@@ -1003,3 +1003,48 @@ textarea:focus {
   flex: 1;
   min-width: 0;
 }
+
+.wysiwyg {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.wysiwyg-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.wysiwyg-toolbar button {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 6px;
+  padding: 0.3rem 0.55rem;
+  cursor: pointer;
+  font: inherit;
+  color: var(--ink);
+}
+
+.wysiwyg-toolbar button:hover {
+  border-color: var(--accent);
+}
+
+.wysiwyg-editor {
+  min-height: 140px;
+  padding: 0.75rem 0.85rem;
+  outline: none;
+  color: var(--ink);
+  line-height: 1.45;
+}
+
+.wysiwyg-editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+  pointer-events: none;
+}

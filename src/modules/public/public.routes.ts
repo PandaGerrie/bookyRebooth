@@ -475,6 +475,13 @@ publicRouter.post("/:entitySlug/bookings", async (req, res, next) => {
       return;
     }
 
+    const forwardedProto = req.get("x-forwarded-proto");
+    const protocol =
+      forwardedProto?.split(",")[0]?.trim() ||
+      (req.protocol === "https" ? "https" : "http");
+    const host = hostFromRequest(req);
+    const publicBaseUrl = host ? `${protocol}://${host}` : "";
+
     const result = await createBooking({
       entityId: scope.entity.id,
       entityName: scope.entity.name,
@@ -486,6 +493,7 @@ publicRouter.post("/:entitySlug/bookings", async (req, res, next) => {
       sellerId: body.sellerId,
       productName: body.productName,
       customer: body.customer,
+      publicBaseUrl,
     });
 
     if (!result.ok) {

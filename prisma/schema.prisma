@@ -38,6 +38,7 @@ model Entity {
   domain     String?
   logoUrl         String?    @db.Text
   introText       String?    @db.VarChar(500)
+  emailExtraTxt   String?    @db.LongText
   primaryColor    String?    @db.VarChar(7)
   secondaryColor  String?    @db.VarChar(7)
   accentColor     String?    @db.VarChar(7)

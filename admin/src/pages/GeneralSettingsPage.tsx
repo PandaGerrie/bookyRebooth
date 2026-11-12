@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { api, uploadMedia } from "../api/client";
 import type { Entity } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
+import { BasicWysiwyg } from "../components/BasicWysiwyg";
 
 type SettingsTab = "content" | "domain" | "tracking" | "sellers";
 
@@ -71,6 +72,7 @@ export function GeneralSettingsPage() {
   const [savingDomain, setSavingDomain] = useState(false);
   const [logoUrl, setLogoUrl] = useState("");
   const [introText, setIntroText] = useState("");
+  const [emailExtraTxt, setEmailExtraTxt] = useState("");
   const [primaryColor, setPrimaryColor] = useState("#121417");
   const [secondaryColor, setSecondaryColor] = useState("#667085");
   const [accentColor, setAccentColor] = useState("#2766ab");
@@ -177,6 +179,7 @@ export function GeneralSettingsPage() {
             name: string;
             logoUrl: string | null;
             introText: string | null;
+            emailExtraTxt: string | null;
             primaryColor: string | null;
             secondaryColor: string | null;
             accentColor: string | null;
@@ -185,6 +188,7 @@ export function GeneralSettingsPage() {
         if (cancelled) return;
         setLogoUrl(data.entity.logoUrl || "");
         setIntroText(data.entity.introText || "");
+        setEmailExtraTxt(data.entity.emailExtraTxt || "");
         setPrimaryColor(data.entity.primaryColor || "#121417");
         setSecondaryColor(data.entity.secondaryColor || "#667085");
         setAccentColor(data.entity.accentColor || "#2766ab");
@@ -316,6 +320,7 @@ export function GeneralSettingsPage() {
           name: string;
           logoUrl: string | null;
           introText: string | null;
+          emailExtraTxt: string | null;
           primaryColor: string | null;
           secondaryColor: string | null;
           accentColor: string | null;
@@ -325,6 +330,7 @@ export function GeneralSettingsPage() {
         body: JSON.stringify({
           logoUrl: logoUrl || null,
           introText: introText.trim() || null,
+          emailExtraTxt: emailExtraTxt.trim() || null,
           primaryColor: primaryColor || null,
           secondaryColor: secondaryColor || null,
           accentColor: accentColor || null,
@@ -333,6 +339,7 @@ export function GeneralSettingsPage() {
       });
       setLogoUrl(data.entity.logoUrl || "");
       setIntroText(data.entity.introText || "");
+      setEmailExtraTxt(data.entity.emailExtraTxt || "");
       setPrimaryColor(data.entity.primaryColor || "#121417");
       setSecondaryColor(data.entity.secondaryColor || "#667085");
       setAccentColor(data.entity.accentColor || "#2766ab");
@@ -884,6 +891,19 @@ export function GeneralSettingsPage() {
                         rows={3}
                         maxLength={500}
                         placeholder="bijv. Kies een bookingflow om te starten"
+                      />
+                    </label>
+
+                    <label>
+                      Email body tekst
+                      <span className="muted" style={{ fontWeight: 400 }}>
+                        {" "}
+                        (extra tekst in de bevestigingsmail naar de klant)
+                      </span>
+                      <BasicWysiwyg
+                        value={emailExtraTxt}
+                        onChange={setEmailExtraTxt}
+                        placeholder="Optionele tekst onderaan / in de bevestigingsmail…"
                       />
                     </label>
                   </div>

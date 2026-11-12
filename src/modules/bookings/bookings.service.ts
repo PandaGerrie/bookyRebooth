@@ -1,7 +1,15 @@
+import { prisma } from "../../lib/prisma.js";
 import {
   createCalendarEvent,
   isAzureConfigured,
 } from "../../lib/azureGraph.js";
+import {
+  absoluteMediaUrl,
+  formatAppointmentTime,
+  isSendGridConfigured,
+  sendBookingConfirmationEmail,
+} from "../../lib/sendgrid.js";
+import { env } from "../../config/env.js";
 import { getAvailabilitySlots } from "../availability/availability.service.js";
 
 export type CreateBookingInput = {
@@ -23,6 +31,7 @@ export type CreateBookingInput = {
     extraInfo?: string;
   };
   productName?: string | null;
+  publicBaseUrl: string;
 };
 
 export type CreateBookingResult = {
@@ -48,6 +57,8 @@ export type CreateBookingResult = {
   customerName: string;
   productName: string | null;
   calendarEventId: string;
+  mailSent: boolean;
+  mailError?: string;
 };
 
 function escapeHtml(value: string) {
@@ -69,6 +80,12 @@ function pickAssignedSeller<T extends { sellerId: string }>(
     hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
   }
   return candidates[hash % candidates.length]!;
+}
+
+function resolvePublicBaseUrl(input: string) {
+  const fromInput = input.trim().replace(/\/$/, "");
+  if (fromInput) return fromInput;
+  return (env.PUBLIC_BASE_URL || "").replace(/\/$/, "");
 }
 
 export async function createBooking(
@@ -169,6 +186,38 @@ export async function createBooking(
       locationAddress: location.address,
     });
 
+    let mailSent = false;
+    let mailError: string | undefined;
+
+    if (isSendGridConfigured()) {
+      try {
+        const entity = await prisma.entity.findUnique({
+          where: { id: input.entityId },
+          select: { emailExtraTxt: true },
+        });
+        const publicBaseUrl = resolvePublicBaseUrl(input.publicBaseUrl);
+        await sendBookingConfirmationEmail({
+          toEmail: input.customer.email,
+          toName: customerName,
+          data: {
+            LocationName: location.name,
+            LocationAdress: location.address,
+            time: formatAppointmentTime(input.date, input.start, input.end),
+            employeeImage: absoluteMediaUrl(chosen.imageUrl, publicBaseUrl),
+            EmployeeName: chosen.name,
+            emailExtraTxt: entity?.emailExtraTxt || "",
+          },
+        });
+        mailSent = true;
+      } catch (error) {
+        mailError =
+          error instanceof Error ? error.message : "Bevestigingsmail mislukt";
+        console.error("[booking] SendGrid error:", mailError);
+      }
+    } else {
+      mailError = "SendGrid is niet geconfigureerd";
+    }
+
     return {
       ok: true,
       data: {
@@ -190,6 +239,8 @@ export async function createBooking(
         customerName,
         productName: input.productName?.trim() || null,
         calendarEventId: event.id,
+        mailSent,
+        mailError,
       },
     };
   } catch (error) {

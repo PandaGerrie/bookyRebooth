@@ -43,6 +43,7 @@ export const updateDomainSettingsSchema = z.object({
 export const updateContentSettingsSchema = z.object({
   logoUrl: z.string().min(1).nullable(),
   introText: z.string().max(500).nullable(),
+  emailExtraTxt: z.string().max(50_000).nullable(),
   primaryColor: hexColorSchema,
   secondaryColor: hexColorSchema,
   accentColor: hexColorSchema,
