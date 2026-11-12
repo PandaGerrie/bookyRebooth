@@ -2,6 +2,10 @@ import { Router } from "express";
 import { prisma } from "../../lib/prisma.js";
 import { assertHostAllowed } from "../../lib/domain.js";
 import { uniqueSlug } from "../../lib/slugify.js";
+import {
+  isRecaptchaConfigured,
+  verifyRecaptchaToken,
+} from "../../lib/recaptcha.js";
 import { getAvailabilitySlots } from "../availability/availability.service.js";
 import { createBooking } from "../bookings/bookings.service.js";
 import {
@@ -471,6 +475,25 @@ publicRouter.post("/:entitySlug/bookings", async (req, res, next) => {
   try {
     const entitySlug = String(req.params.entitySlug).trim().toLowerCase();
     const body = publicCreateBookingSchema.parse(req.body);
+
+    if (!isRecaptchaConfigured()) {
+      res.status(503).json({
+        error:
+          "reCAPTCHA is niet geconfigureerd op de server (RECAPTCHA_SECRET_KEY)",
+      });
+      return;
+    }
+
+    const captcha = await verifyRecaptchaToken({
+      token: body.recaptchaToken,
+      expectedAction: "booking",
+      remoteIp: req.ip,
+    });
+    if (!captcha.ok) {
+      res.status(400).json({ error: captcha.error });
+      return;
+    }
+
     const scope = await resolvePublicEntity(entitySlug, hostFromRequest(req));
 
     if ("error" in scope) {

@@ -24,6 +24,7 @@ export const publicCreateBookingSchema = z.object({
   sellerId: z.string().min(1).max(64).nullable(),
   productName: z.string().max(200).nullable().optional(),
   privacyAccepted: z.literal(true),
+  recaptchaToken: z.string().min(1).max(4000),
   customer: z.object({
     firstName: z.string().trim().min(1).max(80),
     lastName: z.string().trim().min(1).max(80),
