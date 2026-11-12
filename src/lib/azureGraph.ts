@@ -91,25 +91,136 @@ function toGraphDateTime(date: string, time: string) {
   return `${date}T${time}:00`;
 }
 
-function addMinutes(date: string, time: string, minutes: number) {
-  const start = new Date(`${date}T${time}:00`);
-  const end = new Date(start.getTime() + minutes * 60_000);
+/** Windows / Graph timezone aliases → IANA (for Intl parsing). */
+const WINDOWS_TO_IANA: Record<string, string> = {
+  utc: "UTC",
+  "romance standard time": "Europe/Brussels",
+  "w. europe standard time": "Europe/Brussels",
+  "central european standard time": "Europe/Warsaw",
+  "gmt standard time": "Europe/London",
+};
+
+function resolveIanaTimeZone(timeZone?: string) {
+  const raw = (timeZone || env.AZURE_TIMEZONE || "UTC").trim();
+  if (!raw) return "UTC";
+  const mapped = WINDOWS_TO_IANA[raw.toLowerCase()];
+  return mapped || raw;
+}
+
+function getZonedParts(utcMs: number, timeZone: string) {
+  const fmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+  const map: Record<string, string> = {};
+  for (const part of fmt.formatToParts(new Date(utcMs))) {
+    if (part.type !== "literal") map[part.type] = part.value;
+  }
+  return {
+    year: Number(map.year),
+    month: Number(map.month),
+    day: Number(map.day),
+    hour: Number(map.hour),
+    minute: Number(map.minute),
+    second: Number(map.second || "0"),
+  };
+}
+
+/**
+ * Interpret a wall-clock date/time in `timeZone` as UTC epoch ms.
+ * Avoids `new Date("…T12:30:00")` which uses the server's local zone.
+ */
+function wallClockToUtcMs(
+  date: string,
+  time: string,
+  timeZone: string,
+): number {
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute, second = 0] = time.split(":").map(Number);
+  const desiredAsUtc = Date.UTC(
+    year!,
+    (month || 1) - 1,
+    day || 1,
+    hour || 0,
+    minute || 0,
+    second || 0,
+  );
+  let utcMs = desiredAsUtc;
+  for (let i = 0; i < 3; i += 1) {
+    const parts = getZonedParts(utcMs, timeZone);
+    const asUtc = Date.UTC(
+      parts.year,
+      parts.month - 1,
+      parts.day,
+      parts.hour,
+      parts.minute,
+      parts.second,
+    );
+    utcMs += desiredAsUtc - asUtc;
+  }
+  return utcMs;
+}
+
+/**
+ * Graph dateTimeTimeZone values often omit an offset. Without Prefer they are
+ * UTC wall-clock strings with timeZone "UTC"; `new Date(dateTime)` wrongly
+ * treats them as server-local and shifts busy blocks (e.g. 12:30→11:30 CET).
+ */
+function parseGraphDateTime(dateTime: string, timeZone?: string): number {
+  const trimmed = dateTime.trim();
+  const withoutFraction = trimmed.replace(/\.\d+/, "");
+  if (/Z$/i.test(withoutFraction) || /[+-]\d{2}:\d{2}$/.test(withoutFraction)) {
+    return Date.parse(withoutFraction);
+  }
+
+  const match = withoutFraction.match(
+    /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}(?::\d{2})?)/,
+  );
+  if (!match) return Date.parse(trimmed);
+
+  const iana = resolveIanaTimeZone(timeZone);
+  if (iana === "UTC") {
+    return Date.parse(`${match[1]}T${match[2]}Z`);
+  }
+  const time =
+    match[2].length === 5 ? `${match[2]}:00` : match[2];
+  return wallClockToUtcMs(match[1]!, time, iana);
+}
+
+function addMinutesWallClock(
+  date: string,
+  time: string,
+  minutes: number,
+  timeZone: string,
+) {
+  const startMs = wallClockToUtcMs(date, time, timeZone);
+  const end = new Date(startMs + minutes * 60_000);
+  const parts = getZonedParts(end.getTime(), timeZone);
   const pad = (value: number) => String(value).padStart(2, "0");
   return {
-    date: `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`,
-    time: `${pad(end.getHours())}:${pad(end.getMinutes())}`,
+    date: `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`,
+    time: `${pad(parts.hour)}:${pad(parts.minute)}`,
   };
 }
 
 function overlapsSlot(
   item: GraphScheduleItem,
-  slotStart: Date,
-  slotEnd: Date,
+  slotStartMs: number,
+  slotEndMs: number,
 ): boolean {
   if (!item.start?.dateTime || !item.end?.dateTime) return false;
-  const itemStart = new Date(item.start.dateTime);
-  const itemEnd = new Date(item.end.dateTime);
-  return itemStart < slotEnd && itemEnd > slotStart;
+  const itemStart = parseGraphDateTime(
+    item.start.dateTime,
+    item.start.timeZone,
+  );
+  const itemEnd = parseGraphDateTime(item.end.dateTime, item.end.timeZone);
+  return itemStart < slotEndMs && itemEnd > slotStartMs;
 }
 
 async function getSchedules(
@@ -124,7 +235,13 @@ async function getSchedules(
   if (uniqueEmails.length === 0) return [];
 
   const token = await getAccessToken();
-  const end = addMinutes(startDate, startTime, durationMinutes);
+  const timeZone = env.AZURE_TIMEZONE;
+  const end = addMinutesWallClock(
+    startDate,
+    startTime,
+    durationMinutes,
+    timeZone,
+  );
   const organizer = uniqueEmails[0];
 
   const response = await fetch(
@@ -134,18 +251,20 @@ async function getSchedules(
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
+        // Return scheduleItems in our app timezone (not naked UTC strings).
+        Prefer: `outlook.timezone="${timeZone}"`,
       },
       body: JSON.stringify({
         schedules: uniqueEmails,
         startTime: {
           dateTime: toGraphDateTime(startDate, startTime),
-          timeZone: env.AZURE_TIMEZONE,
+          timeZone,
         },
         endTime: {
           dateTime: toGraphDateTime(end.date, end.time),
-          timeZone: env.AZURE_TIMEZONE,
+          timeZone,
         },
-        availabilityViewInterval: Math.min(durationMinutes, 60),
+        availabilityViewInterval: 30,
       }),
     },
   );
@@ -222,13 +341,13 @@ export async function checkCalendarVisibility(
 
 function isScheduleBusy(
   schedule: GraphSchedule,
-  slotStart: Date,
-  slotEnd: Date,
+  slotStartMs: number,
+  slotEndMs: number,
 ): boolean {
   return (schedule.scheduleItems ?? []).some((item) => {
     const status = (item.status || "").toLowerCase();
-    if (status === "free") return false;
-    return overlapsSlot(item, slotStart, slotEnd);
+    if (status === "free" || status === "workingelsewhere") return false;
+    return overlapsSlot(item, slotStartMs, slotEndMs);
   });
 }
 
@@ -244,8 +363,9 @@ export async function checkAvailabilityAt(
 
   if (uniqueEmails.length === 0) return [];
 
-  const slotStart = new Date(`${date}T${time}:00`);
-  const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60_000);
+  const timeZone = env.AZURE_TIMEZONE;
+  const slotStartMs = wallClockToUtcMs(date, time, timeZone);
+  const slotEndMs = slotStartMs + durationMinutes * 60_000;
   const schedules = await getSchedules(
     uniqueEmails,
     date,
@@ -265,7 +385,7 @@ export async function checkAvailabilityAt(
       };
     }
 
-    const busy = isScheduleBusy(schedule, slotStart, slotEnd);
+    const busy = isScheduleBusy(schedule, slotStartMs, slotEndMs);
 
     return {
       email,
@@ -380,11 +500,12 @@ export async function checkHourlyAvailability(
   const sorted = [...slots].sort((a, b) => a.start.localeCompare(b.start));
   const windowStart = sorted[0].start;
   const windowEnd = sorted[sorted.length - 1].end;
-  const startDate = new Date(`${date}T${windowStart}:00`);
-  const endDate = new Date(`${date}T${windowEnd}:00`);
+  const timeZone = env.AZURE_TIMEZONE;
+  const startMs = wallClockToUtcMs(date, windowStart, timeZone);
+  const endMs = wallClockToUtcMs(date, windowEnd, timeZone);
   const durationMinutes = Math.max(
     60,
-    Math.round((endDate.getTime() - startDate.getTime()) / 60_000),
+    Math.round((endMs - startMs) / 60_000),
   );
 
   const schedules = await getSchedules(
@@ -410,11 +531,11 @@ export async function checkHourlyAvailability(
       email,
       reachable: true,
       slots: slots.map((slot) => {
-        const slotStart = new Date(`${date}T${slot.start}:00`);
-        const slotEnd = new Date(`${date}T${slot.end}:00`);
+        const slotStartMs = wallClockToUtcMs(date, slot.start, timeZone);
+        const slotEndMs = wallClockToUtcMs(date, slot.end, timeZone);
         return {
           ...slot,
-          available: !isScheduleBusy(schedule, slotStart, slotEnd),
+          available: !isScheduleBusy(schedule, slotStartMs, slotEndMs),
         };
       }),
     };
