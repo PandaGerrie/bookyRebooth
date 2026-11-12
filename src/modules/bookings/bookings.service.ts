@@ -187,6 +187,12 @@ export async function createBooking(
       end: input.end,
       locationName: location.name,
       locationAddress: location.address,
+      attendees: [
+        {
+          email: input.customer.email,
+          name: customerName,
+        },
+      ],
     });
 
     let mailSent = false;

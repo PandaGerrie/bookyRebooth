@@ -407,6 +407,11 @@ export type HourlyAvailability = {
   slots: Array<HourlySlot & { available: boolean }>;
 };
 
+export type CreateCalendarEventAttendee = {
+  email: string;
+  name?: string;
+};
+
 export type CreateCalendarEventInput = {
   sellerEmail: string;
   subject: string;
@@ -416,6 +421,8 @@ export type CreateCalendarEventInput = {
   end: string;
   locationName: string;
   locationAddress?: string | null;
+  /** Invited guests (e.g. customer) — Graph sends calendar invites. */
+  attendees?: CreateCalendarEventAttendee[];
 };
 
 export type CreateCalendarEventResult = {
@@ -431,6 +438,20 @@ export async function createCalendarEvent(
     .map((part) => part?.trim())
     .filter(Boolean)
     .join(" — ");
+
+  const attendees = (input.attendees ?? [])
+    .map((guest) => {
+      const address = guest.email.trim().toLowerCase();
+      if (!address) return null;
+      return {
+        emailAddress: {
+          address,
+          ...(guest.name?.trim() ? { name: guest.name.trim() } : {}),
+        },
+        type: "required" as const,
+      };
+    })
+    .filter((guest): guest is NonNullable<typeof guest> => Boolean(guest));
 
   const response = await fetch(
     `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(input.sellerEmail)}/events`,
@@ -457,6 +478,13 @@ export async function createCalendarEvent(
         location: {
           displayName: locationDisplay || input.locationName,
         },
+        ...(attendees.length > 0
+          ? {
+              attendees,
+              responseRequested: true,
+              allowNewTimeProposals: false,
+            }
+          : {}),
         isReminderOn: true,
         reminderMinutesBeforeStart: 15,
       }),
