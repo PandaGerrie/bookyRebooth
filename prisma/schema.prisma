@@ -48,11 +48,12 @@ model Entity {
   active          Boolean    @default(true)
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
-  users      User[]
-  locations  Location[]
-  sellers    Seller[]
-  categories Category[]
-  flows      Flow[]
+  users       User[]
+  locations   Location[]
+  sellers     Seller[]
+  categories  Category[]
+  flows       Flow[]
+  productSets ProductSet[] @relation("ProductSetEntities")
 }
 
 model User {
@@ -74,6 +75,7 @@ model ProductSet {
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
   products  ProductSetItem[]
+  entities  Entity[]         @relation("ProductSetEntities")
 }
 
 model ProductSetItem {

@@ -279,11 +279,7 @@ export function FlowBuilderPage() {
       setLoading(true);
       setError(null);
       try {
-        const [flowData, productSetsData] = await Promise.all([
-          api<{ flow: Flow }>(`/flows/${id}`),
-          api<{ productSets: ProductSet[] }>("/product-sets"),
-        ]);
-
+        const flowData = await api<{ flow: Flow }>(`/flows/${id}`);
         if (cancelled) return;
 
         const flow = flowData.flow;
@@ -293,6 +289,11 @@ export function FlowBuilderPage() {
         setFeaturedImage(flow.featuredImage);
         setActive(flow.active);
         setEntitySlug(flow.entity?.slug || "global");
+
+        const productSetsData = await api<{ productSets: ProductSet[] }>(
+          `/product-sets?entityId=${encodeURIComponent(flow.entityId)}`,
+        );
+        if (cancelled) return;
         setProductSets(productSetsData.productSets);
         const loadedSteps = flow.steps ?? [];
         const existingConfirmation = loadedSteps.find(

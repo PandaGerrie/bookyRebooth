@@ -70,10 +70,16 @@ async function validateSteps(
       if (typeof productSetId !== "string") {
         return "Ongeldige product set";
       }
-      const exists = await prisma.productSet.findUnique({
-        where: { id: productSetId },
+      const exists = await prisma.productSet.findFirst({
+        where: {
+          id: productSetId,
+          entities: { some: { id: entityId } },
+        },
+        select: { id: true },
       });
-      if (!exists) return "Product set bestaat niet";
+      if (!exists) {
+        return "Product set bestaat niet of is niet beschikbaar voor deze entiteit";
+      }
     }
 
     if (step.type === "LOCATIONS") {

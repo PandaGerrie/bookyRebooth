@@ -44,6 +44,7 @@ export type ProductSet = {
   id: string;
   name: string;
   products: ProductSetItem[];
+  entities?: Array<{ id: string; name: string; slug: string }>;
   createdAt?: string;
   updatedAt?: string;
 };

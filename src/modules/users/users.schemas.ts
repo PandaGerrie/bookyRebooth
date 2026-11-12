@@ -4,10 +4,11 @@ export const createUserSchema = z
   .object({
     email: z.string().email(),
     password: z.string().min(8),
-    role: z.enum(["SUPER_ADMIN", "ENTITY_ADMIN"]),
+    role: z.enum(["SUPER_ADMIN", "ENTITY_ADMIN"]).optional(),
     entityId: z.string().cuid().optional().nullable(),
   })
   .superRefine((data, ctx) => {
+    // Role/entity rules are enforced in the route based on who is logged in.
     if (data.role === "SUPER_ADMIN" && data.entityId) {
       ctx.addIssue({
         code: "custom",
@@ -16,7 +17,7 @@ export const createUserSchema = z
       });
     }
 
-    if (data.role === "ENTITY_ADMIN" && !data.entityId) {
+    if (data.role === "ENTITY_ADMIN" && data.entityId === null) {
       ctx.addIssue({
         code: "custom",
         path: ["entityId"],

@@ -1,8 +1,11 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
+import Select from "react-select";
 import { Navigate } from "react-router-dom";
 import { api, uploadMedia } from "../api/client";
-import type { ProductSet, ProductSetItem } from "../api/types";
+import type { Entity, ProductSet, ProductSetItem } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
+
+type SelectOption = { value: string; label: string };
 
 type DraftProduct = {
   key: string;
@@ -13,6 +16,7 @@ type DraftProduct = {
 type FormState = {
   name: string;
   products: DraftProduct[];
+  entityIds: string[];
 };
 
 function newProduct(): DraftProduct {
@@ -26,6 +30,7 @@ function newProduct(): DraftProduct {
 const emptyForm: FormState = {
   name: "",
   products: [newProduct()],
+  entityIds: [],
 };
 
 function IconCheck() {
@@ -65,6 +70,7 @@ export function ProductSetsPage() {
   const { user } = useAuth();
   const isSuper = user?.role === "SUPER_ADMIN";
   const [productSets, setProductSets] = useState<ProductSet[]>([]);
+  const [entities, setEntities] = useState<Entity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -73,6 +79,15 @@ export function ProductSetsPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+
+  const entityOptions = useMemo<SelectOption[]>(
+    () =>
+      entities.map((entity) => ({
+        value: entity.id,
+        label: entity.name,
+      })),
+    [entities],
+  );
 
   useEffect(() => {
     if (!isSuper) return;
@@ -83,8 +98,14 @@ export function ProductSetsPage() {
       setLoading(true);
       setError(null);
       try {
-        const data = await api<{ productSets: ProductSet[] }>("/product-sets");
-        if (!cancelled) setProductSets(data.productSets);
+        const [setsData, entitiesData] = await Promise.all([
+          api<{ productSets: ProductSet[] }>("/product-sets"),
+          api<{ entities: Entity[] }>("/entities"),
+        ]);
+        if (!cancelled) {
+          setProductSets(setsData.productSets);
+          setEntities(entitiesData.entities);
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Laden mislukt");
@@ -112,7 +133,7 @@ export function ProductSetsPage() {
   function startCreate() {
     const product = newProduct();
     setEditingId(null);
-    setForm({ name: "", products: [product] });
+    setForm({ name: "", products: [product], entityIds: [] });
     setExpandedKeys(new Set([product.key]));
     setShowForm(true);
   }
@@ -128,7 +149,11 @@ export function ProductSetsPage() {
         : [newProduct()];
 
     setEditingId(set.id);
-    setForm({ name: set.name, products });
+    setForm({
+      name: set.name,
+      products,
+      entityIds: (set.entities ?? []).map((entity) => entity.id),
+    });
     // Existing items start collapsed; empty draft starts expanded
     setExpandedKeys(
       new Set(
@@ -208,6 +233,7 @@ export function ProductSetsPage() {
 
     const payload = {
       name: form.name,
+      entityIds: form.entityIds,
       products: products.map((product) => ({
         name: product.name,
         photoUrl: product.photoUrl,
@@ -255,7 +281,10 @@ export function ProductSetsPage() {
       <div className="page-header">
         <div>
           <h1>Product sets</h1>
-          <p>Algemene wagensets. Alleen beheerbaar door super admins.</p>
+          <p>
+            Algemene wagensets. Kies per set welke entiteiten ze in de flow
+            builder mogen gebruiken.
+          </p>
         </div>
         <button type="button" className="btn" onClick={startCreate}>
           Nieuwe product set
@@ -278,6 +307,7 @@ export function ProductSetsPage() {
             <thead>
               <tr>
                 <th>Naam</th>
+                <th>Entiteiten</th>
                 <th>Producten</th>
                 <th></th>
               </tr>
@@ -286,6 +316,25 @@ export function ProductSetsPage() {
               {productSets.map((set) => (
                 <tr key={set.id}>
                   <td>{set.name}</td>
+                  <td>
+                    {(set.entities ?? []).length === 0 ? (
+                      <span className="muted">Geen toegang</span>
+                    ) : (
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "0.35rem",
+                        }}
+                      >
+                        {(set.entities ?? []).map((entity) => (
+                          <span key={entity.id} className="badge">
+                            {entity.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td>
                     <div
                       style={{
@@ -380,6 +429,29 @@ export function ProductSetsPage() {
                 required
               />
             </label>
+
+            <label>
+              Beschikbaar voor entiteiten
+              <Select
+                isMulti
+                classNamePrefix="rs"
+                options={entityOptions}
+                value={entityOptions.filter((option) =>
+                  form.entityIds.includes(option.value),
+                )}
+                onChange={(selected) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    entityIds: selected.map((option) => option.value),
+                  }))
+                }
+                placeholder="Selecteer entiteiten…"
+                noOptionsMessage={() => "Geen entiteiten"}
+              />
+            </label>
+            <p className="muted" style={{ margin: 0 }}>
+              Alleen geselecteerde entiteiten zien deze set in de flow builder.
+            </p>
 
             <div className="stack">
               <h3>Producten</h3>

@@ -55,20 +55,36 @@ export function UsersPage() {
     void load();
   }, [isSuper]);
 
+  function openCreateForm() {
+    setForm({
+      ...emptyForm,
+      entityId: isSuper ? "" : user?.entityId || "",
+      role: "ENTITY_ADMIN",
+    });
+    setShowForm(true);
+  }
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setSaving(true);
     setError(null);
 
     try {
+      const payload = isSuper
+        ? {
+            email: form.email,
+            password: form.password,
+            role: form.role,
+            entityId: form.role === "ENTITY_ADMIN" ? form.entityId : null,
+          }
+        : {
+            email: form.email,
+            password: form.password,
+          };
+
       await api("/users", {
         method: "POST",
-        body: JSON.stringify({
-          email: form.email,
-          password: form.password,
-          role: form.role,
-          entityId: form.role === "ENTITY_ADMIN" ? form.entityId : null,
-        }),
+        body: JSON.stringify(payload),
       });
 
       setShowForm(false);
@@ -88,25 +104,20 @@ export function UsersPage() {
           <h1>Gebruikers</h1>
           <p>
             {isSuper
-              ? "Beheer alle accounts in het CMS."
-              : "Accounts binnen jouw entiteit."}
+              ? "Beheer alle accounts: super admins of toewijzen aan een entiteit."
+              : "Voeg collega’s toe binnen jouw entiteit."}
           </p>
         </div>
-        {isSuper ? (
-          <button
-            type="button"
-            className="btn"
-            onClick={() => {
-              setForm(emptyForm);
-              setShowForm(true);
-            }}
-          >
-            Nieuwe gebruiker
-          </button>
-        ) : null}
+        <button type="button" className="btn" onClick={openCreateForm}>
+          Nieuwe gebruiker
+        </button>
       </div>
 
-      {error ? <p className="error" style={{ marginBottom: "1rem" }}>{error}</p> : null}
+      {error ? (
+        <p className="error" style={{ marginBottom: "1rem" }}>
+          {error}
+        </p>
+      ) : null}
 
       <div className="panel">
         {loading ? (
@@ -119,7 +130,7 @@ export function UsersPage() {
               <tr>
                 <th>E-mail</th>
                 <th>Rol</th>
-                <th>Entiteit</th>
+                {isSuper ? <th>Entiteit</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -129,16 +140,22 @@ export function UsersPage() {
                   <td>
                     <span className="badge">{roleLabel[item.role]}</span>
                   </td>
-                  <td>{item.entity?.name ?? "—"}</td>
+                  {isSuper ? <td>{item.entity?.name ?? "—"}</td> : null}
                 </tr>
               ))}
             </tbody>
           </table>
         )}
 
-        {isSuper && showForm ? (
+        {showForm ? (
           <form className="drawer stack" onSubmit={onSubmit}>
             <h2>Nieuwe gebruiker</h2>
+            {!isSuper && user?.entity?.name ? (
+              <p className="muted" style={{ margin: 0 }}>
+                Wordt toegevoegd aan <strong>{user.entity.name}</strong> als
+                entiteit admin.
+              </p>
+            ) : null}
             <div className="form-grid two">
               <label>
                 E-mail
@@ -163,39 +180,46 @@ export function UsersPage() {
                   required
                 />
               </label>
-              <label>
-                Rol
-                <select
-                  value={form.role}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      role: e.target.value as Role,
-                    }))
-                  }
-                >
-                  <option value="ENTITY_ADMIN">Entiteit admin</option>
-                  <option value="SUPER_ADMIN">Super admin</option>
-                </select>
-              </label>
-              {form.role === "ENTITY_ADMIN" ? (
-                <label>
-                  Entiteit
-                  <select
-                    value={form.entityId}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, entityId: e.target.value }))
-                    }
-                    required
-                  >
-                    <option value="">Kies entiteit…</option>
-                    {entities.map((entity) => (
-                      <option key={entity.id} value={entity.id}>
-                        {entity.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              {isSuper ? (
+                <>
+                  <label>
+                    Rol
+                    <select
+                      value={form.role}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          role: e.target.value as Role,
+                        }))
+                      }
+                    >
+                      <option value="ENTITY_ADMIN">Entiteit admin</option>
+                      <option value="SUPER_ADMIN">Super admin</option>
+                    </select>
+                  </label>
+                  {form.role === "ENTITY_ADMIN" ? (
+                    <label>
+                      Entiteit
+                      <select
+                        value={form.entityId}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            entityId: e.target.value,
+                          }))
+                        }
+                        required
+                      >
+                        <option value="">Kies entiteit…</option>
+                        {entities.map((entity) => (
+                          <option key={entity.id} value={entity.id}>
+                            {entity.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                </>
               ) : null}
             </div>
             <div className="actions">

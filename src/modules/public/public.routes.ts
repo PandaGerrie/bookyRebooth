@@ -181,8 +181,11 @@ async function resolveStepOptions(
     const productSetId =
       typeof config.productSetId === "string" ? config.productSetId : null;
     if (!productSetId) return [];
-    const productSet = await prisma.productSet.findUnique({
-      where: { id: productSetId },
+    const productSet = await prisma.productSet.findFirst({
+      where: {
+        id: productSetId,
+        entities: { some: { id: entityId } },
+      },
       select: {
         products: {
           orderBy: { sortOrder: "asc" },

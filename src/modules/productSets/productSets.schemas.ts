@@ -8,9 +8,11 @@ const productItemSchema = z.object({
 export const createProductSetSchema = z.object({
   name: z.string().min(1).max(120),
   products: z.array(productItemSchema).default([]),
+  entityIds: z.array(z.string().cuid()).default([]),
 });
 
 export const updateProductSetSchema = z.object({
   name: z.string().min(1).max(120),
   products: z.array(productItemSchema).default([]),
+  entityIds: z.array(z.string().cuid()).default([]),
 });

@@ -15,11 +15,49 @@ const productInclude = {
   products: {
     orderBy: { sortOrder: "asc" as const },
   },
+  entities: {
+    select: { id: true, name: true, slug: true },
+    orderBy: { name: "asc" as const },
+  },
 };
 
-productSetsRouter.get("/", async (_req, res, next) => {
+async function assertEntitiesExist(entityIds: string[]) {
+  if (entityIds.length === 0) return true;
+  const unique = [...new Set(entityIds)];
+  const count = await prisma.entity.count({
+    where: { id: { in: unique } },
+  });
+  return count === unique.length;
+}
+
+productSetsRouter.get("/", async (req, res, next) => {
   try {
+    const current = req.user!;
+    const queryEntityId =
+      typeof req.query.entityId === "string" && req.query.entityId.trim()
+        ? req.query.entityId.trim()
+        : null;
+
+    let where:
+      | { entities: { some: { id: string } } }
+      | undefined;
+
+    if (current.role === "SUPER_ADMIN") {
+      if (queryEntityId) {
+        where = { entities: { some: { id: queryEntityId } } };
+      }
+    } else {
+      if (!current.entityId) {
+        res
+          .status(403)
+          .json({ error: "Entity admin is not linked to an entity" });
+        return;
+      }
+      where = { entities: { some: { id: current.entityId } } };
+    }
+
     const productSets = await prisma.productSet.findMany({
+      where,
       orderBy: { name: "asc" },
       include: productInclude,
     });
@@ -31,6 +69,7 @@ productSetsRouter.get("/", async (_req, res, next) => {
 
 productSetsRouter.get("/:id", async (req, res, next) => {
   try {
+    const current = req.user!;
     const productSet = await prisma.productSet.findUnique({
       where: { id: req.params.id },
       include: productInclude,
@@ -39,6 +78,16 @@ productSetsRouter.get("/:id", async (req, res, next) => {
     if (!productSet) {
       res.status(404).json({ error: "Product set niet gevonden" });
       return;
+    }
+
+    if (current.role !== "SUPER_ADMIN") {
+      if (
+        !current.entityId ||
+        !productSet.entities.some((entity) => entity.id === current.entityId)
+      ) {
+        res.status(404).json({ error: "Product set niet gevonden" });
+        return;
+      }
     }
 
     res.json({ productSet });
@@ -50,6 +99,12 @@ productSetsRouter.get("/:id", async (req, res, next) => {
 productSetsRouter.post("/", requireRole("SUPER_ADMIN"), async (req, res, next) => {
   try {
     const body = createProductSetSchema.parse(req.body);
+    const entityIds = [...new Set(body.entityIds)];
+
+    if (!(await assertEntitiesExist(entityIds))) {
+      res.status(400).json({ error: "Een of meer entiteiten bestaan niet" });
+      return;
+    }
 
     const productSet = await prisma.productSet.create({
       data: {
@@ -60,6 +115,9 @@ productSetsRouter.post("/", requireRole("SUPER_ADMIN"), async (req, res, next) =
             photoUrl: product.photoUrl,
             sortOrder: index,
           })),
+        },
+        entities: {
+          connect: entityIds.map((id) => ({ id })),
         },
       },
       include: productInclude,
@@ -78,6 +136,7 @@ productSetsRouter.put(
     try {
       const id = String(req.params.id);
       const body = updateProductSetSchema.parse(req.body);
+      const entityIds = [...new Set(body.entityIds)];
 
       const existing = await prisma.productSet.findUnique({
         where: { id },
@@ -85,6 +144,11 @@ productSetsRouter.put(
 
       if (!existing) {
         res.status(404).json({ error: "Product set niet gevonden" });
+        return;
+      }
+
+      if (!(await assertEntitiesExist(entityIds))) {
+        res.status(400).json({ error: "Een of meer entiteiten bestaan niet" });
         return;
       }
 
@@ -103,6 +167,9 @@ productSetsRouter.put(
                 photoUrl: product.photoUrl,
                 sortOrder: index,
               })),
+            },
+            entities: {
+              set: entityIds.map((entityId) => ({ id: entityId })),
             },
           },
           include: productInclude,
