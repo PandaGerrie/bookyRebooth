@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { AppShell } from "./components/AppShell";
+import { AccountPage } from "./pages/AccountPage";
 import { CategoriesPage } from "./pages/CategoriesPage";
 import { EntitiesPage } from "./pages/EntitiesPage";
 import { FlowBuilderPage } from "./pages/FlowBuilderPage";
@@ -40,6 +41,7 @@ export function App() {
         }
       >
         <Route index element={<HomePage />} />
+        <Route path="account" element={<AccountPage />} />
         <Route path="entities" element={<EntitiesPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="settings" element={<GeneralSettingsPage />} />

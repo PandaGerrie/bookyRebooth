@@ -177,9 +177,15 @@ export function UsersPage() {
                     setForm((prev) => ({ ...prev, password: e.target.value }))
                   }
                   minLength={8}
+                  pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}"
+                  title="Minimaal 8 tekens, met hoofdletter, kleine letter, cijfer en speciaal teken"
                   required
                 />
               </label>
+              <p className="muted" style={{ margin: 0, gridColumn: "1 / -1" }}>
+                Minimaal 8 tekens, met hoofdletter, kleine letter, cijfer en
+                speciaal teken.
+              </p>
               {isSuper ? (
                 <>
                   <label>

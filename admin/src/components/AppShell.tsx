@@ -76,6 +76,9 @@ export function AppShell() {
             <div>{user ? roleLabel[user.role] : ""}</div>
             {user?.entity?.name ? <div>{user.entity.name}</div> : null}
           </div>
+          <NavLink to="/account" className={navClass}>
+            Wachtwoord wijzigen
+          </NavLink>
           <button type="button" className="btn btn-ghost" onClick={logout}>
             Uitloggen
           </button>

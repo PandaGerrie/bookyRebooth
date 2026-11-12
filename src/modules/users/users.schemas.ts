@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { strongPasswordSchema } from "../../lib/password.js";
 
 export const createUserSchema = z
   .object({
     email: z.string().email(),
-    password: z.string().min(8),
+    password: strongPasswordSchema,
     role: z.enum(["SUPER_ADMIN", "ENTITY_ADMIN"]).optional(),
     entityId: z.string().cuid().optional().nullable(),
   })

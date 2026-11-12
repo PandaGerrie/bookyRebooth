@@ -5,7 +5,7 @@ import type { SignOptions } from "jsonwebtoken";
 import { prisma } from "../../lib/prisma.js";
 import { env } from "../../config/env.js";
 import { requireAuth } from "../../middleware/auth.js";
-import { loginSchema } from "./auth.schemas.js";
+import { changePasswordSchema, loginSchema } from "./auth.schemas.js";
 
 export const authRouter = Router();
 
@@ -94,6 +94,38 @@ authRouter.get("/me", requireAuth, async (req, res, next) => {
     }
 
     res.json({ user });
+  } catch (error) {
+    next(error);
+  }
+});
+
+authRouter.post("/change-password", requireAuth, async (req, res, next) => {
+  try {
+    const body = changePasswordSchema.parse(req.body);
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { id: true, passwordHash: true },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const valid = await bcrypt.compare(body.currentPassword, user.passwordHash);
+    if (!valid) {
+      res.status(400).json({ error: "Huidig wachtwoord is onjuist" });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(body.newPassword, 12);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash },
+    });
+
+    res.json({ ok: true });
   } catch (error) {
     next(error);
   }

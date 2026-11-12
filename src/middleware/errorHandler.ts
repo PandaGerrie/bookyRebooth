@@ -4,8 +4,9 @@ import { Prisma } from "@prisma/client";
 
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof ZodError) {
+    const firstIssue = err.issues[0]?.message;
     res.status(400).json({
-      error: "Validation failed",
+      error: firstIssue || "Validation failed",
       details: err.flatten(),
     });
     return;
