@@ -74,7 +74,7 @@ export function AccountPage() {
       </div>
 
       <div className="panel" style={{ maxWidth: 560 }}>
-        <form className="stack" onSubmit={onSubmit}>
+        <form className="panel-body stack" onSubmit={onSubmit}>
           <h2 style={{ margin: 0 }}>Wachtwoord wijzigen</h2>
           <p className="muted" style={{ margin: 0 }}>
             {PASSWORD_HINT}
