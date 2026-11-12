@@ -31,6 +31,14 @@ enum FlowStepType {
   CONFIRMATION
 }
 
+enum AnalyticsEventType {
+  NOT_FOUND_404
+  FORM_SUBMIT_ERROR
+  EMAIL_ERROR
+  MAKE_ERROR
+  FORM_SUBMIT_SUCCESS
+}
+
 model Entity {
   id         String     @id @default(cuid())
   name       String
@@ -52,8 +60,9 @@ model Entity {
   locations   Location[]
   sellers     Seller[]
   categories  Category[]
-  flows       Flow[]
-  productSets ProductSet[] @relation("ProductSetEntities")
+  flows           Flow[]
+  productSets     ProductSet[]    @relation("ProductSetEntities")
+  analyticsEvents AnalyticsEvent[]
 }
 
 model User {
@@ -192,4 +201,20 @@ model FlowStep {
   updatedAt DateTime     @updatedAt
 
   @@index([flowId])
+}
+
+model AnalyticsEvent {
+  id         String             @id @default(cuid())
+  type       AnalyticsEventType
+  entityId   String?
+  entity     Entity?            @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  sellerId   String?
+  locationId String?
+  categoryId String?
+  message    String?            @db.VarChar(500)
+  createdAt  DateTime           @default(now())
+
+  @@index([type, createdAt])
+  @@index([entityId, createdAt])
+  @@index([createdAt])
 }

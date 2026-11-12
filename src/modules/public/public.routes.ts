@@ -1,5 +1,7 @@
 import { Router } from "express";
+import { ZodError } from "zod";
 import { prisma } from "../../lib/prisma.js";
+import { trackEvent } from "../../lib/analytics.js";
 import { assertHostAllowed } from "../../lib/domain.js";
 import { uniqueSlug } from "../../lib/slugify.js";
 import {
@@ -264,6 +266,10 @@ publicRouter.get("/:entitySlug/bootstrap", async (req, res, next) => {
     });
 
     if (!entity || !entity.active) {
+      trackEvent({
+        type: "NOT_FOUND_404",
+        message: `Bootstrap: entiteit niet gevonden (${entitySlug})`,
+      });
       res.status(404).json({ error: "Entiteit niet gevonden" });
       return;
     }
@@ -325,6 +331,12 @@ publicRouter.get("/:entitySlug/flows/:flowSlug", async (req, res, next) => {
     const scope = await resolvePublicEntity(entitySlug, hostFromRequest(req));
 
     if ("error" in scope) {
+      if (scope.status === 404) {
+        trackEvent({
+          type: "NOT_FOUND_404",
+          message: `Flow: entiteit niet gevonden (${entitySlug})`,
+        });
+      }
       res.status(scope.status).json({ error: scope.error });
       return;
     }
@@ -353,6 +365,11 @@ publicRouter.get("/:entitySlug/flows/:flowSlug", async (req, res, next) => {
     });
 
     if (!flow) {
+      trackEvent({
+        type: "NOT_FOUND_404",
+        entityId: scope.entity.id,
+        message: `Flow niet gevonden (${flowSlug})`,
+      });
       res.status(404).json({ error: "Flow niet gevonden" });
       return;
     }
@@ -474,9 +491,41 @@ publicRouter.post("/:entitySlug/availability/slots", async (req, res, next) => {
 publicRouter.post("/:entitySlug/bookings", async (req, res, next) => {
   try {
     const entitySlug = String(req.params.entitySlug).trim().toLowerCase();
-    const body = publicCreateBookingSchema.parse(req.body);
+    const scope = await resolvePublicEntity(entitySlug, hostFromRequest(req));
+
+    if ("error" in scope) {
+      if (scope.status === 404) {
+        trackEvent({
+          type: "NOT_FOUND_404",
+          message: `Booking: entiteit niet gevonden (${entitySlug})`,
+        });
+      }
+      res.status(scope.status).json({ error: scope.error });
+      return;
+    }
+
+    let body: ReturnType<typeof publicCreateBookingSchema.parse>;
+    try {
+      body = publicCreateBookingSchema.parse(req.body);
+    } catch (error) {
+      const message =
+        error instanceof ZodError
+          ? error.issues[0]?.message || "Validatie mislukt"
+          : "Validatie mislukt";
+      trackEvent({
+        type: "FORM_SUBMIT_ERROR",
+        entityId: scope.entity.id,
+        message,
+      });
+      throw error;
+    }
 
     if (!isRecaptchaConfigured()) {
+      trackEvent({
+        type: "FORM_SUBMIT_ERROR",
+        entityId: scope.entity.id,
+        message: "reCAPTCHA niet geconfigureerd",
+      });
       res.status(503).json({
         error:
           "reCAPTCHA is niet geconfigureerd op de server (RECAPTCHA_SECRET_KEY)",
@@ -490,14 +539,12 @@ publicRouter.post("/:entitySlug/bookings", async (req, res, next) => {
       remoteIp: req.ip,
     });
     if (!captcha.ok) {
+      trackEvent({
+        type: "FORM_SUBMIT_ERROR",
+        entityId: scope.entity.id,
+        message: captcha.error,
+      });
       res.status(400).json({ error: captcha.error });
-      return;
-    }
-
-    const scope = await resolvePublicEntity(entitySlug, hostFromRequest(req));
-
-    if ("error" in scope) {
-      res.status(scope.status).json({ error: scope.error });
       return;
     }
 
@@ -523,9 +570,22 @@ publicRouter.post("/:entitySlug/bookings", async (req, res, next) => {
     });
 
     if (!result.ok) {
+      trackEvent({
+        type: "FORM_SUBMIT_ERROR",
+        entityId: scope.entity.id,
+        message: result.error,
+      });
       res.status(result.status).json({ error: result.error });
       return;
     }
+
+    trackEvent({
+      type: "FORM_SUBMIT_SUCCESS",
+      entityId: scope.entity.id,
+      sellerId: result.data.seller.sellerId,
+      locationId: result.data.location.id,
+      categoryId: result.data.category.id,
+    });
 
     res.status(201).json({
       booking: result.data,

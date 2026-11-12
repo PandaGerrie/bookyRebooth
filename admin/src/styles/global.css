@@ -1073,3 +1073,66 @@ textarea:focus {
   color: var(--muted);
   pointer-events: none;
 }
+
+.stats-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.stats-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1rem 1.1rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.stats-card-muted {
+  opacity: 0.85;
+}
+
+.stats-card-label {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.stats-card-value {
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.stats-card-note {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.stats-hero-metric {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.stats-breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .stats-cards,
+  .stats-breakdown-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .stats-cards,
+  .stats-breakdown-grid {
+    grid-template-columns: 1fr;
+  }
+}

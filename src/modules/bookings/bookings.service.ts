@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma.js";
+import { trackEvent } from "../../lib/analytics.js";
 import {
   createCalendarEvent,
   isAzureConfigured,
@@ -224,6 +225,14 @@ export async function createBooking(
         mailError =
           error instanceof Error ? error.message : "Bevestigingsmail mislukt";
         console.error("[booking] SendGrid error:", mailError);
+        trackEvent({
+          type: "EMAIL_ERROR",
+          entityId: input.entityId,
+          sellerId: chosen.sellerId,
+          locationId: location.id,
+          categoryId: availability.data.category.id,
+          message: mailError,
+        });
       }
     } else {
       const missing = sendGridMissingConfig();
@@ -231,6 +240,14 @@ export async function createBooking(
         missing.length > 0
           ? `SendGrid is niet geconfigureerd (ontbreekt: ${missing.join(", ")})`
           : "SendGrid is niet geconfigureerd";
+      trackEvent({
+        type: "EMAIL_ERROR",
+        entityId: input.entityId,
+        sellerId: chosen.sellerId,
+        locationId: location.id,
+        categoryId: availability.data.category.id,
+        message: mailError,
+      });
     }
 
     return {
