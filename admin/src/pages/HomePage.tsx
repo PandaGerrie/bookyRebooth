@@ -40,32 +40,30 @@ function BreakdownTable({
   emptyLabel: string;
 }) {
   return (
-    <div className="panel">
-      <div className="panel-body stack">
-        <h3 style={{ margin: 0, fontSize: "1rem" }}>{title}</h3>
-        {rows.length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>
-            {emptyLabel}
-          </p>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Naam</th>
-                <th style={{ width: 88, textAlign: "right" }}>Aantal</th>
+    <div className="stats-breakdown stack">
+      <h3 style={{ margin: 0, fontSize: "1rem" }}>{title}</h3>
+      {rows.length === 0 ? (
+        <p className="muted" style={{ margin: 0 }}>
+          {emptyLabel}
+        </p>
+      ) : (
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Naam</th>
+              <th style={{ width: 88, textAlign: "right" }}>Aantal</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id}>
+                <td>{row.name}</td>
+                <td style={{ textAlign: "right" }}>{row.count}</td>
               </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td>{row.name}</td>
-                  <td style={{ textAlign: "right" }}>{row.count}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }
@@ -193,78 +191,79 @@ export function HomePage() {
       ) : null}
 
       {overview ? (
-        <div className="stack" style={{ gap: "1.5rem" }}>
-          <section className="stack">
-            <div>
-              <h2 style={{ fontSize: "1.15rem" }}>Gezondheid</h2>
-              <p className="muted" style={{ marginTop: "0.25rem" }}>
-                Laatste {overview.days} dagen
-              </p>
-            </div>
-            <div className="stats-cards">
-              <div className="stats-card">
-                <span className="stats-card-label">404-fouten</span>
-                <strong className="stats-card-value">
-                  {overview.health.notFound404}
-                </strong>
+        <div className="stack" style={{ gap: "1.25rem" }}>
+          <section className="panel">
+            <div className="panel-body stack">
+              <div>
+                <h2 style={{ fontSize: "1.15rem" }}>Gezondheid</h2>
+                <p className="muted" style={{ marginTop: "0.25rem" }}>
+                  Laatste {overview.days} dagen
+                </p>
               </div>
-              <div className="stats-card">
-                <span className="stats-card-label">Formulierfouten</span>
-                <strong className="stats-card-value">
-                  {overview.health.formSubmitError}
-                </strong>
-              </div>
-              <div className="stats-card">
-                <span className="stats-card-label">E-mailfouten</span>
-                <strong className="stats-card-value">
-                  {overview.health.emailError}
-                </strong>
-              </div>
-              <div className="stats-card stats-card-muted">
-                <span className="stats-card-label">Make-fouten</span>
-                <strong className="stats-card-value">
-                  {overview.health.makeError}
-                </strong>
-                <span className="stats-card-note">Coming soon</span>
+              <div className="stats-cards">
+                <div className="stats-card">
+                  <span className="stats-card-label">404-fouten</span>
+                  <strong className="stats-card-value">
+                    {overview.health.notFound404}
+                  </strong>
+                </div>
+                <div className="stats-card">
+                  <span className="stats-card-label">Formulierfouten</span>
+                  <strong className="stats-card-value">
+                    {overview.health.formSubmitError}
+                  </strong>
+                </div>
+                <div className="stats-card">
+                  <span className="stats-card-label">E-mailfouten</span>
+                  <strong className="stats-card-value">
+                    {overview.health.emailError}
+                  </strong>
+                </div>
+                <div className="stats-card stats-card-muted">
+                  <span className="stats-card-label">Make-fouten</span>
+                  <strong className="stats-card-value">
+                    {overview.health.makeError}
+                  </strong>
+                  <span className="stats-card-note">Coming soon</span>
+                </div>
               </div>
             </div>
           </section>
 
-          <section className="stack">
-            <div>
-              <h2 style={{ fontSize: "1.15rem" }}>Analytics</h2>
-              <p className="muted" style={{ marginTop: "0.25rem" }}>
-                Succesvolle boekingsinzendingen · laatste {overview.days} dagen
-              </p>
-            </div>
-
-            <div className="panel">
-              <div className="panel-body">
-                <div className="stats-hero-metric">
-                  <span className="stats-card-label">Succesvolle inzendingen</span>
-                  <strong className="stats-card-value">
-                    {overview.analytics.successfulSubmissions}
-                  </strong>
-                </div>
+          <section className="panel">
+            <div className="panel-body stack">
+              <div>
+                <h2 style={{ fontSize: "1.15rem" }}>Analytics</h2>
+                <p className="muted" style={{ marginTop: "0.25rem" }}>
+                  Succesvolle boekingsinzendingen · laatste {overview.days}{" "}
+                  dagen
+                </p>
               </div>
-            </div>
 
-            <div className="stats-breakdown-grid">
-              <BreakdownTable
-                title="Per verkoper"
-                rows={overview.analytics.bySeller}
-                emptyLabel="Nog geen data"
-              />
-              <BreakdownTable
-                title="Per locatie"
-                rows={overview.analytics.byLocation}
-                emptyLabel="Nog geen data"
-              />
-              <BreakdownTable
-                title="Per categorie"
-                rows={overview.analytics.byCategory}
-                emptyLabel="Nog geen data"
-              />
+              <div className="stats-hero-metric">
+                <span className="stats-card-label">Succesvolle inzendingen</span>
+                <strong className="stats-card-value">
+                  {overview.analytics.successfulSubmissions}
+                </strong>
+              </div>
+
+              <div className="stats-breakdown-grid">
+                <BreakdownTable
+                  title="Per verkoper"
+                  rows={overview.analytics.bySeller}
+                  emptyLabel="Nog geen data"
+                />
+                <BreakdownTable
+                  title="Per locatie"
+                  rows={overview.analytics.byLocation}
+                  emptyLabel="Nog geen data"
+                />
+                <BreakdownTable
+                  title="Per categorie"
+                  rows={overview.analytics.byCategory}
+                  emptyLabel="Nog geen data"
+                />
+              </div>
             </div>
           </section>
         </div>

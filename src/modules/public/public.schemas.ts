@@ -15,6 +15,11 @@ export const publicAvailabilitySlotsSchema = z.object({
   dayStartHour: z.number().int().min(0).max(23).optional().default(10),
 });
 
+export const publicTrackEventSchema = z.object({
+  type: z.literal("NOT_FOUND_404"),
+  message: z.string().trim().max(500).optional(),
+});
+
 export const publicCreateBookingSchema = z.object({
   location: z.string().min(1).max(120),
   category: z.string().min(1).max(120),

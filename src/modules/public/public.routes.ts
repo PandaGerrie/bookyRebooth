@@ -13,6 +13,7 @@ import { createBooking } from "../bookings/bookings.service.js";
 import {
   publicAvailabilitySlotsSchema,
   publicCreateBookingSchema,
+  publicTrackEventSchema,
 } from "./public.schemas.js";
 
 export const publicRouter = Router();
@@ -421,6 +422,41 @@ publicRouter.get("/:entitySlug/flows/:flowSlug", async (req, res, next) => {
       },
       steps,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Publieke analytics-events (alleen toegestane types, bv. client-side 404).
+ *
+ * POST /api/public/:entitySlug/analytics/events
+ */
+publicRouter.post("/:entitySlug/analytics/events", async (req, res, next) => {
+  try {
+    const entitySlug = String(req.params.entitySlug).trim().toLowerCase();
+    const body = publicTrackEventSchema.parse(req.body);
+    const scope = await resolvePublicEntity(entitySlug, hostFromRequest(req));
+
+    if ("error" in scope) {
+      // Still record the 404 when the entity itself is missing.
+      if (scope.status === 404 && body.type === "NOT_FOUND_404") {
+        trackEvent({
+          type: "NOT_FOUND_404",
+          message: body.message || `Track: entiteit niet gevonden (${entitySlug})`,
+        });
+      }
+      res.status(scope.status).json({ error: scope.error });
+      return;
+    }
+
+    trackEvent({
+      type: body.type,
+      entityId: scope.entity.id,
+      message: body.message || null,
+    });
+
+    res.status(204).send();
   } catch (error) {
     next(error);
   }
