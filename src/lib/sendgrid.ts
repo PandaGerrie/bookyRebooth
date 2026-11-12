@@ -8,14 +8,49 @@ export function isSendGridConfigured() {
   );
 }
 
+export function sendGridMissingConfig(): string[] {
+  const missing: string[] = [];
+  if (!env.SENDGRID_API_KEY) missing.push("SENDGRID_API_KEY");
+  if (!env.SENDGRID_FROM_EMAIL) missing.push("SENDGRID_FROM_EMAIL");
+  if (!env.SENDGRID_BOOKING_TEMPLATE_ID) {
+    missing.push("SENDGRID_BOOKING_TEMPLATE_ID");
+  }
+  return missing;
+}
+
+/** Exact SendGrid handlebars keys from the template. */
 export type BookingMailData = {
-  LocationName: string;
-  LocationAdress: string;
+  locationName: string;
+  locationAdress: string;
   time: string;
-  employeeImage: string;
-  EmployeeName: string;
+  employeeName: string;
   emailExtraTxt: string;
+  entityLogo: string;
+  locationImage: string;
+  employeeImage: string;
 };
+
+export function buildBookingMailData(input: {
+  locationName: string;
+  locationAddress: string;
+  time: string;
+  employeeName: string;
+  emailExtraTxt: string;
+  entityLogo: string;
+  locationImage: string;
+  employeeImage: string;
+}): BookingMailData {
+  return {
+    locationName: input.locationName,
+    locationAdress: input.locationAddress,
+    time: input.time,
+    employeeName: input.employeeName,
+    emailExtraTxt: input.emailExtraTxt,
+    entityLogo: input.entityLogo,
+    locationImage: input.locationImage,
+    employeeImage: input.employeeImage,
+  };
+}
 
 export async function sendBookingConfirmationEmail(input: {
   toEmail: string;

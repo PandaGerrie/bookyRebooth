@@ -894,18 +894,20 @@ export function GeneralSettingsPage() {
                       />
                     </label>
 
-                    <label>
-                      Email body tekst
-                      <span className="muted" style={{ fontWeight: 400 }}>
-                        {" "}
-                        (extra tekst in de bevestigingsmail naar de klant)
-                      </span>
+                    <div className="stack" style={{ gap: 6 }}>
+                      <div>
+                        Email body tekst
+                        <span className="muted" style={{ fontWeight: 400 }}>
+                          {" "}
+                          (extra tekst in de bevestigingsmail naar de klant)
+                        </span>
+                      </div>
                       <BasicWysiwyg
                         value={emailExtraTxt}
                         onChange={setEmailExtraTxt}
                         placeholder="Optionele tekst onderaan / in de bevestigingsmail…"
                       />
-                    </label>
+                    </div>
                   </div>
                 </details>
 

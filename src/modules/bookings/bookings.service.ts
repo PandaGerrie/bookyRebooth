@@ -5,9 +5,11 @@ import {
 } from "../../lib/azureGraph.js";
 import {
   absoluteMediaUrl,
+  buildBookingMailData,
   formatAppointmentTime,
   isSendGridConfigured,
   sendBookingConfirmationEmail,
+  sendGridMissingConfig,
 } from "../../lib/sendgrid.js";
 import { env } from "../../config/env.js";
 import { getAvailabilitySlots } from "../availability/availability.service.js";
@@ -82,10 +84,11 @@ function pickAssignedSeller<T extends { sellerId: string }>(
   return candidates[hash % candidates.length]!;
 }
 
-function resolvePublicBaseUrl(input: string) {
-  const fromInput = input.trim().replace(/\/$/, "");
-  if (fromInput) return fromInput;
-  return (env.PUBLIC_BASE_URL || "").replace(/\/$/, "");
+function resolvePublicBaseUrl(requestBaseUrl: string) {
+  // Prefer configured public URL so email images are reachable (not localhost).
+  const fromEnv = (env.PUBLIC_BASE_URL || "").trim().replace(/\/$/, "");
+  if (fromEnv) return fromEnv;
+  return requestBaseUrl.trim().replace(/\/$/, "");
 }
 
 export async function createBooking(
@@ -193,20 +196,22 @@ export async function createBooking(
       try {
         const entity = await prisma.entity.findUnique({
           where: { id: input.entityId },
-          select: { emailExtraTxt: true },
+          select: { emailExtraTxt: true, logoUrl: true },
         });
         const publicBaseUrl = resolvePublicBaseUrl(input.publicBaseUrl);
         await sendBookingConfirmationEmail({
           toEmail: input.customer.email,
           toName: customerName,
-          data: {
-            LocationName: location.name,
-            LocationAdress: location.address,
+          data: buildBookingMailData({
+            locationName: location.name,
+            locationAddress: location.address,
             time: formatAppointmentTime(input.date, input.start, input.end),
-            employeeImage: absoluteMediaUrl(chosen.imageUrl, publicBaseUrl),
-            EmployeeName: chosen.name,
+            employeeName: chosen.name,
             emailExtraTxt: entity?.emailExtraTxt || "",
-          },
+            entityLogo: absoluteMediaUrl(entity?.logoUrl, publicBaseUrl),
+            locationImage: absoluteMediaUrl(location.imageUrl, publicBaseUrl),
+            employeeImage: absoluteMediaUrl(chosen.imageUrl, publicBaseUrl),
+          }),
         });
         mailSent = true;
       } catch (error) {
@@ -215,7 +220,11 @@ export async function createBooking(
         console.error("[booking] SendGrid error:", mailError);
       }
     } else {
-      mailError = "SendGrid is niet geconfigureerd";
+      const missing = sendGridMissingConfig();
+      mailError =
+        missing.length > 0
+          ? `SendGrid is niet geconfigureerd (ontbreekt: ${missing.join(", ")})`
+          : "SendGrid is niet geconfigureerd";
     }
 
     return {

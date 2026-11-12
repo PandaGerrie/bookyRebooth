@@ -71,7 +71,13 @@ export type AvailabilitySlotsResult = {
   date: string;
   weekday: Weekday;
   dayStartHour: number;
-  location: { id: string; name: string; permalink: string; address: string };
+  location: {
+    id: string;
+    name: string;
+    permalink: string;
+    address: string;
+    imageUrl: string | null;
+  };
   category: { id: string; name: string; slug: string };
   sellers: Array<{
     sellerId: string;
@@ -124,6 +130,7 @@ export async function getAvailabilitySlots(
       name: true,
       permalink: true,
       address: true,
+      imageUrl: true,
       entityId: true,
     },
   });
@@ -272,6 +279,7 @@ export async function getAvailabilitySlots(
         name: location.name,
         permalink: location.permalink,
         address: location.address,
+        imageUrl: location.imageUrl,
       },
       category: {
         id: category.id,
