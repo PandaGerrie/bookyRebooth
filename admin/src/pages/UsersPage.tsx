@@ -22,6 +22,16 @@ const roleLabel: Record<Role, string> = {
   ENTITY_ADMIN: "Entiteit admin",
 };
 
+function formatLastLogin(value: string | null | undefined) {
+  if (!value) return "Nog nooit";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("nl-BE", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
 export function UsersPage() {
   const { user } = useAuth();
   const isSuper = user?.role === "SUPER_ADMIN";
@@ -131,6 +141,7 @@ export function UsersPage() {
                 <th>E-mail</th>
                 <th>Rol</th>
                 {isSuper ? <th>Entiteit</th> : null}
+                <th>Laatst ingelogd</th>
               </tr>
             </thead>
             <tbody>
@@ -141,6 +152,7 @@ export function UsersPage() {
                     <span className="badge">{roleLabel[item.role]}</span>
                   </td>
                   {isSuper ? <td>{item.entity?.name ?? "—"}</td> : null}
+                  <td>{formatLastLogin(item.lastLoggedInAt)}</td>
                 </tr>
               ))}
             </tbody>

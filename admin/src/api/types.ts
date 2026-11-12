@@ -21,6 +21,7 @@ export type User = {
   email: string;
   role: Role;
   entityId: string | null;
+  lastLoggedInAt?: string | null;
   createdAt?: string;
   entity?: EntitySummary | null;
 };

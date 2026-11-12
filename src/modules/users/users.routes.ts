@@ -14,6 +14,7 @@ const userSelect = {
   email: true,
   role: true,
   entityId: true,
+  lastLoggedInAt: true,
   createdAt: true,
   entity: {
     select: { id: true, name: true, slug: true },

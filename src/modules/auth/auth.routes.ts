@@ -34,6 +34,12 @@ authRouter.post("/login", async (req, res, next) => {
       return;
     }
 
+    const lastLoggedInAt = new Date();
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoggedInAt },
+    });
+
     const tokenPayload = {
       id: user.id,
       email: user.email,
@@ -52,6 +58,7 @@ authRouter.post("/login", async (req, res, next) => {
         email: user.email,
         role: user.role,
         entityId: user.entityId,
+        lastLoggedInAt: lastLoggedInAt.toISOString(),
         entity: user.entity
           ? {
               id: user.entity.id,
